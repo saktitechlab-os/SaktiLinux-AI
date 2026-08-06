@@ -1,0 +1,17 @@
+{
+    "KPlugin": {
+        "Id": "org.kde.plasma.sakti.ai",
+        "Name": "SaktiAI Sidebar",
+        "Description": "AI Sidebar — SaktiLinux' always-ready assistant surface.",
+        "Version": "0.2.0",
+        "License": "GPL-3.0",
+        "Authors": [{ "Email": "dev@saktilinux.ai", "Name": "SaktiLinux AI" }],
+        "Category": "Utilities",
+        "ServiceTypes": ["Plasma/Applet"],
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API": "declarativeappletscript",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "X-Plasma-Provides": ["org.kde.plasma.sakti.ai"],
+    "KPackageStructure": "Plasma/Applet"
+}

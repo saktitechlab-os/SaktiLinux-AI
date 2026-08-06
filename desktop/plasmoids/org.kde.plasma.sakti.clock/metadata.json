@@ -1,0 +1,16 @@
+{
+    "KPlugin": {
+        "Id": "org.kde.plasma.sakti.clock",
+        "Name": "Sakti Clock",
+        "Description": "Glass clock widget with date and smooth time transitions.",
+        "Version": "0.2.0",
+        "License": "GPL-3.0",
+        "Authors": [{ "Email": "dev@saktilinux.ai", "Name": "SaktiLinux AI" }],
+        "Category": "Time",
+        "ServiceTypes": ["Plasma/Applet"],
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API": "declarativeappletscript",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "KPackageStructure": "Plasma/Applet"
+}

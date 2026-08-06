@@ -10,17 +10,26 @@
 - [x] Tests & CI
 - [x] README / CHANGELOG / ROADMAP / LICENSE
 
-## Phase 2 — Desktop
+## Phase 2 — Desktop ✅
 
-- [ ] Global theme (Inter, JetBrains Mono, Geist fonts)
-- [ ] Floating Dock
-- [ ] Floating Taskbar
-- [ ] Control Center
-- [ ] Notification Center
-- [ ] Spotlight Search
-- [ ] Login screen
-- [ ] Boot animation
-- [ ] SVG icon system
+- [x] Dynamic Workspace Mode system (default / developer / designer / cyber)
+- [x] Global theme generation (Inter, JetBrains Mono, Geist fonts)
+- [x] Floating Dock (mode-driven)
+- [x] Floating Taskbar
+- [x] Control Center (glass applet)
+- [x] Notification Center (smart grouping)
+- [x] Spotlight Search (Super+Space)
+- [x] AI Sidebar applet
+- [x] Login screen (SDDM glass theme)
+- [x] Lock screen (SDDM-based)
+- [x] Modern Widgets (clock, workspaces)
+- [x] Workspace switcher (mode-aware)
+- [x] Rounded windows + blur/acrylic (KWin compositing + theme)
+- [x] Smooth animations
+- [x] Dynamic wallpapers (per mode)
+- [x] Dynamic accent colors (cyan / indigo / orchid)
+- [x] Font Awesome SVG icon system (SaktiIcons)
+- [ ] Boot animation refinement (with splash in Phase 15 ISO)
 
 ## Phase 3 — AI Brain
 

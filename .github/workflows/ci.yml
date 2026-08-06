@@ -20,6 +20,11 @@ jobs:
       - name: Validate package manifests
         run: python3 tests/unit/test_packages.py packages/lists
 
+      - name: Validate desktop modes, themes, plasmoids
+        run: |
+          python3 themes/generate.py --output-dir themes
+          python3 tests/unit/test_desktop.py
+
       - name: Shell syntax check
         run: |
           set -e

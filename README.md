@@ -11,17 +11,29 @@ talk to **SaktiAI** — the always-running assistant (Super + Space, or "Hey Sak
 Build the world's most intelligent Linux operating system — AI first, open
 source, offline-first, privacy-first, and beautiful.
 
-## Project Status — Phase 1 (In Progress)
+## Project Status — Phase 2 (In Progress)
 
-Phase 1: Architecture, Folder Structure, Branding, Base System.
+Phase 1: Architecture, Folder Structure, Branding, Base System ✅
+Phase 2: Desktop Experience, Dynamic Workspace Modes ✅
 See [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
+
+## Desktop Highlights (Phase 2)
+
+- **Dynamic Workspace Modes** — `sakti-modes switch developer|designer|cyber`
+  re-shapes the dock, launcher, widgets, shortcuts, accent color, and
+  wallpaper. Installed apps are never removed — only UI changes.
+- **Floating glass shell** — dock, taskbar, control center, notification
+  center, spotlight search, AI sidebar.
+- **Theme pipeline** — `branding/colors.json` → KDE color schemes per accent.
+- **Font Awesome style SVG icons**, Inter / JetBrains Mono / Geist fonts.
+- **Glass SDDM login screen** and per-mode wallpapers.
 
 ## Top-Level Structure
 
 ```
 docs/          Architecture, guides, security docs
 branding/      Logo, colors, brand guide
-desktop/       Dock, taskbar, panels, shell components
+desktop/       Mode engine, mode defs, plasmoids, shell components
 ai/            SaktiAI brain, memory, search, automation
 kernel/        Kernel configuration and tuning
 installer/     Beautiful ISO installer
@@ -34,10 +46,10 @@ terminal/      AI Terminal
 voice/         Voice assistant — wake word, STT, TTS
 security/      Firewall, sandbox, permissions, AI malware detection
 plugins/       Bundled plugins
-scripts/       Build & automation scripts
-themes/        Global themes
+scripts/       Build, install & automation scripts
+themes/        Theme generator, color schemes, SDDM login theme
 tests/         Test suites
-assets/        Icons, wallpapers, fonts
+assets/        Icons (FA style), wallpapers, fonts
 .github/       CI/CD
 ```
 
@@ -65,6 +77,8 @@ Development currently targets an Arch Linux virtual machine
 1. Start the VM.
 2. `ssh -p 3022 saktios@127.0.0.1`
 3. `git clone` this repository, then run `scripts/bootstrap-base.sh`.
+4. For the desktop shell: `sudo bash scripts/install-desktop.sh` and
+   reboot (or restart SDDM). Switch workspaces with `sakti-modes switch <mode>`.
 
 See [docs/guides/development.md](docs/guides/development.md).
 

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Sakti Splash
+Comment=SaktiLinux AI boot splash
+Type=Service
+X-KDE-ServiceTypes=Plasma/LookAndFeel
+X-KDE-ParentApp=lookandfeel
+Encoding=UTF-8

@@ -16,9 +16,17 @@ import sys
 import unittest
 
 ARCH_PKG_RE = re.compile(r"^[a-z0-9@._+-]+$")
-MANIFESTS_DIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+
+# Manifests dir: first arg if provided and exists (direct invocation),
+# otherwise the repository default. Survives `unittest discover` argv.
+_MANIFESTS_DEFAULT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "packages", "lists",
+)
+MANIFESTS_DIR = (
+    sys.argv[1]
+    if len(sys.argv) > 1 and os.path.isdir(sys.argv[1])
+    else _MANIFESTS_DEFAULT
 )
 
 

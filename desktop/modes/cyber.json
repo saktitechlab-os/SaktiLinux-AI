@@ -1,0 +1,42 @@
+{
+  "id": "cyber",
+  "label": "Cyber",
+  "accent": "cyan",
+  "wallpaper": "sakti-cyber.svg",
+  "dock": [
+    "burpsuite",
+    "wireshark",
+    "nmap",
+    "msfconsole",
+    "org.kde.konsole",
+    "org.kde.falkon"
+  ],
+  "launcher": [
+    "burpsuite",
+    "wireshark",
+    "nmap",
+    "msfconsole",
+    "hydra",
+    "john",
+    "org.kde.konsole",
+    "org.kde.falkon"
+  ],
+  "favorites": [
+    "burpsuite",
+    "wireshark",
+    "org.kde.konsole"
+  ],
+  "widgets": [
+    "org.kde.plasma.sakti.ai",
+    "org.kde.plasma.systemmonitor.net",
+    "org.kde.plasma.sakti.clock"
+  ],
+  "shortcuts": {
+    "org.kde.konsole": "Meta+T",
+    "burpsuite": "Meta+B"
+  },
+  "setup": {
+    "enable_night_color": false,
+    "security_focus": true
+  }
+}

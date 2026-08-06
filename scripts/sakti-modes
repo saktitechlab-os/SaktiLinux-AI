@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# SaktiLinux AI — CLI entry point for the Work Mode Manager
+# Installed to /usr/local/bin/sakti-modes by install-desktop.sh
+# Usage: sakti-modes switch <mode> | list | current | validate
+
+set -Eeuo pipefail
+
+SCRIPT_SRC="/usr/share/sakti/desktop/mode_engine.py"
+if [[ ! -f "$SCRIPT_SRC" ]]; then
+  # dev fallback: run from repo
+  SCRIPT_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/desktop/mode_engine.py"
+fi
+
+exec python3 "$SCRIPT_SRC" "$@"

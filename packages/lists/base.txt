@@ -30,4 +30,3 @@ wireplumber
 
 # Development baseline (shared across modes)
 git
-base-devel

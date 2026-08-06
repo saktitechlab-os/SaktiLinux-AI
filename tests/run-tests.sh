@@ -21,6 +21,7 @@ echo "========================"
 
 run "python3 $ROOT_DIR/tests/unit/test_structure.py"
 run "python3 $ROOT_DIR/tests/unit/test_packages.py $ROOT_DIR/packages/lists"
+run "python3 $ROOT_DIR/tests/unit/test_desktop.py"
 
 # Shell syntax check for all scripts
 for script in "$ROOT_DIR"/scripts/*.sh "$ROOT_DIR"/scripts/common/*.sh; do

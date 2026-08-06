@@ -1,0 +1,17 @@
+{
+    "KPlugin": {
+        "Id": "org.kde.plasma.sakti.spotlight",
+        "Name": "Sakti Spotlight",
+        "Description": "Spotlight-style launcher and AI search — hit Super+Space to fly.",
+        "Version": "0.2.0",
+        "License": "GPL-3.0",
+        "Authors": [{ "Email": "dev@saktilinux.ai", "Name": "SaktiLinux AI" }],
+        "Category": "Application Launchers",
+        "ServiceTypes": ["Plasma/Applet"],
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API": "declarativeappletscript",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "X-Plasma-Provides": ["org.kde.plasma.sakti.spotlight"],
+    "KPackageStructure": "Plasma/Applet"
+}

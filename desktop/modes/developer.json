@@ -1,0 +1,41 @@
+{
+  "id": "developer",
+  "label": "Developer",
+  "accent": "indigo",
+  "wallpaper": "sakti-developer.svg",
+  "dock": [
+    "code",
+    "cursor",
+    "com.bitwarden.desktop",
+    "org.kde.konsole",
+    "docker",
+    "org.kde.dolphin"
+  ],
+  "launcher": [
+    "code",
+    "cursor",
+    "opencode",
+    "docker",
+    "org.kde.konsole",
+    "org.kde.dolphin",
+    "org.kde.plasma.systemmonitor",
+    "git"
+  ],
+  "favorites": [
+    "code",
+    "org.kde.konsole",
+    "docker"
+  ],
+  "widgets": [
+    "org.kde.plasma.sakti.ai",
+    "org.kde.plasma.systemmonitor.cpu",
+    "org.kde.plasma.sakti.clock"
+  ],
+  "shortcuts": {
+    "code": "Meta+C",
+    "org.kde.konsole": "Meta+T"
+  },
+  "setup": {
+    "enable_night_color": true
+  }
+}

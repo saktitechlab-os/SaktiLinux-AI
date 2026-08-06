@@ -1,0 +1,16 @@
+{
+    "KPlugin": {
+        "Id": "org.kde.plasma.sakti.notifications",
+        "Name": "Sakti Notification Center",
+        "Description": "Glass notification center with smart grouping and clear-all.",
+        "Version": "0.2.0",
+        "License": "GPL-3.0",
+        "Authors": [{ "Email": "dev@saktilinux.ai", "Name": "SaktiLinux AI" }],
+        "Category": "System Information",
+        "ServiceTypes": ["Plasma/Applet"],
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API": "declarativeappletscript",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "KPackageStructure": "Plasma/Applet"
+}

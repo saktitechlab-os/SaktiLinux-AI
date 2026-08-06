@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Sakti
+Comment=SaktiLinux AI Plasma theme
+Type=Service
+X-KDE-ServiceTypes=Plasma/LookAndFeel
+X-KDE-ParentApp=lookandfeel
+Encoding=UTF-8

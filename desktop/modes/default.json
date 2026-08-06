@@ -1,0 +1,36 @@
+{
+  "id": "default",
+  "label": "Default",
+  "accent": "cyan",
+  "wallpaper": "sakti-default.svg",
+  "dock": [
+    "org.kde.dolphin",
+    "org.kde.konsole",
+    "org.kde.plasma.systemmonitor",
+    "org.kde.kate"
+  ],
+  "launcher": [
+    "org.kde.dolphin",
+    "org.kde.konsole",
+    "org.kde.kate",
+    "org.kde.plasma.systemmonitor",
+    "org.kde.ark",
+    "org.kde.spectacle",
+    "org.kde.dolphin"
+  ],
+  "favorites": [
+    "org.kde.dolphin",
+    "org.kde.konsole"
+  ],
+  "widgets": [
+    "org.kde.plasma.sakti.ai",
+    "org.kde.plasma.sakti.clock"
+  ],
+  "shortcuts": {
+    "org.kde.plasma.sakti.ai": "Meta+Space",
+    "org.kde.konsole": "Meta+T"
+  },
+  "setup": {
+    "enable_night_color": true
+  }
+}

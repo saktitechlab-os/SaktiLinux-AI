@@ -1,0 +1,16 @@
+{
+    "KPlugin": {
+        "Id": "org.kde.plasma.sakti.workspaces",
+        "Name": "Sakti Workspace Switcher",
+        "Description": "Dynamic workspace switcher — grid overview with mode-aware workspaces.",
+        "Version": "0.2.0",
+        "License": "GPL-3.0",
+        "Authors": [{ "Email": "dev@saktilinux.ai", "Name": "SaktiLinux AI" }],
+        "Category": "System Information",
+        "ServiceTypes": ["Plasma/Applet"],
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API": "declarativeappletscript",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "KPackageStructure": "Plasma/Applet"
+}

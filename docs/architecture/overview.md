@@ -90,8 +90,11 @@ Secure · Offline First · Privacy First · Modular · Scalable · Maintainable.
 ### 5.3 Work Modes
 - Developer / Designer / Cyber modes.
 - Context-aware shell: relevant apps promoted, unrelated apps hidden.
-- Mode driven by AI context + explicit switch; per-user profile under
-  `packages/lists/`.
+- Implemented by the Dynamic Workspace system (`desktop/mode_engine.py`,
+  `desktop/modes/*.json`, `sakti-modes` CLI) — **Phase 2**.
+- Mode changes affect dock, launcher, widgets, shortcuts, accent, and
+  wallpaper only. Installed applications are never removed.
+- See `docs/architecture/desktop.md`.
 
 ### 5.4 Security Model
 - nftables firewall, bubblewrap/firejail sandbox, permission manager.

@@ -1,0 +1,39 @@
+{
+  "id": "designer",
+  "label": "Designer",
+  "accent": "orchid",
+  "wallpaper": "sakti-designer.svg",
+  "dock": [
+    "org.blender.Blender",
+    "penpot",
+    "org.kde.krita",
+    "org.kde.inkscape",
+    "org.kde.dolphin"
+  ],
+  "launcher": [
+    "org.blender.Blender",
+    "penpot",
+    "org.kde.krita",
+    "org.kde.inkscape",
+    "gimp",
+    "org.kde.dolphin",
+    "org.kde.gwenview"
+  ],
+  "favorites": [
+    "org.blender.Blender",
+    "penpot",
+    "org.kde.krita"
+  ],
+  "widgets": [
+    "org.kde.plasma.sakti.ai",
+    "org.kde.plasma.sakti.clock",
+    "org.kde.plasma.colorpicker"
+  ],
+  "shortcuts": {
+    "org.kde.spectacle": "Meta+Shift+S",
+    "org.kde.plasma.sakti.ai": "Meta+Space"
+  },
+  "setup": {
+    "enable_night_color": false
+  }
+}
