@@ -1,0 +1,33 @@
+# SaktiLinux — base system package manifest
+# One package per line. Lines starting with # are comments.
+
+# Core
+base
+base-devel
+linux
+linux-firmware
+linux-headers
+
+# Boot / firmware
+grub
+efibootmgr
+
+# Networking
+networkmanager
+openssh
+curl
+wget
+rsync
+
+# System tooling
+sudo
+pacman-contrib
+reflector
+systemd-resolvconf
+pipewire
+pipewire-pulse
+wireplumber
+
+# Development baseline (shared across modes)
+git
+base-devel

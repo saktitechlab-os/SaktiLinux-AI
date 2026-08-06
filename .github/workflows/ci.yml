@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate repository structure
+        run: python3 tests/unit/test_structure.py
+
+      - name: Validate package manifests
+        run: python3 tests/unit/test_packages.py packages/lists
+
+      - name: Shell syntax check
+        run: |
+          set -e
+          for script in scripts/*.sh scripts/common/*.sh; do
+            echo "Checking $script"
+            bash -n "$script"
+          done
+
+      - name: Full test runner
+        run: bash tests/run-tests.sh

@@ -1,0 +1,10 @@
+# SaktiLinux — Designer Mode package manifest (Phase 5)
+# Extend later with Penpot, Krita, Inkscape integrations.
+
+blender
+krita
+inkscape
+gimp
+darktable
+rawtherapee
+imagemagick

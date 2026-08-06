@@ -1,0 +1,12 @@
+# SaktiLinux — Cyber Mode package manifest (Phase 6)
+# Note: some tools may conflict with production security policy; install-only.
+
+nmap
+wireshark-qt
+burpsuite
+metasploit
+hydra
+john
+aircrack-ng
+net-tools
+tcpdump

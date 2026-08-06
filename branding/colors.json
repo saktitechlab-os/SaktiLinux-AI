@@ -1,0 +1,96 @@
+{
+  "brand": {
+    "name": "SaktiLinux AI",
+    "tagline": "The AI Native Linux Distribution",
+    "ai_assistant": "SaktiAI"
+  },
+  "palette": {
+    "primary": {
+      "name": "Sakti Cyan",
+      "hex": "#22d3ee",
+      "rgb": [34, 211, 238],
+      "usage": "Accents, links, active states, AI highlights"
+    },
+    "secondary": {
+      "name": "Sakti Indigo",
+      "hex": "#818cf8",
+      "rgb": [129, 140, 248],
+      "usage": "Secondary accents, gradients, selection"
+    },
+    "accent": {
+      "name": "Sakti Orchid",
+      "hex": "#c084fc",
+      "rgb": [192, 132, 252],
+      "usage": "AI-first surfaces, assistant glow, premium highlights"
+    },
+    "background": {
+      "name": "Deep Space",
+      "hex": "#0f172a",
+      "rgb": [15, 23, 42],
+      "usage": "Base background (dark)"
+    },
+    "background_alt": {
+      "name": "Midnight",
+      "hex": "#0b1240",
+      "rgb": [11, 18, 64],
+      "usage": "Alternate background, gradients, glass tint"
+    },
+    "surface": {
+      "name": "Glass",
+      "hex": "#1e293b",
+      "alpha": 0.62,
+      "usage": "Floating dock, taskbar, panels, overlays"
+    },
+    "surface_raised": {
+      "name": "Elevated Glass",
+      "hex": "#334155",
+      "alpha": 0.55,
+      "usage": "Popovers, menus, tooltips"
+    },
+    "text_primary": {
+      "hex": "#f8fafc",
+      "usage": "Primary text"
+    },
+    "text_secondary": {
+      "hex": "#94a3b8",
+      "usage": "Secondary text, captions"
+    },
+    "text_disabled": {
+      "hex": "#475569",
+      "usage": "Disabled states"
+    },
+    "success": { "hex": "#4ade80" },
+    "warning": { "hex": "#fbbf24" },
+    "danger": { "hex": "#f87171" },
+    "info": { "hex": "#38bdf8" }
+  },
+  "glass": {
+    "blur": "16px",
+    "border_alpha": 0.12,
+    "corner_radius": {
+      "small": "8px",
+      "medium": "14px",
+      "large": "20px",
+      "pill": "999px"
+    }
+  },
+  "typography": {
+    "ui": "Inter",
+    "mono": "JetBrains Mono",
+    "display": "Geist",
+    "sizes": {
+      "caption": "12px",
+      "body": "14px",
+      "heading": "18px",
+      "title": "24px",
+      "display": "34px"
+    }
+  },
+  "spacing": {
+    "xs": "4px",
+    "sm": "8px",
+    "md": "16px",
+    "lg": "24px",
+    "xl": "40px"
+  }
+}

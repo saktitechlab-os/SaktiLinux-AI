@@ -1,0 +1,49 @@
+# Ignore VirtualBox / VM artifacts
+*.vdi
+*.vbox
+*.vbox-prev
+*.nvram
+Logs/
+Snapshots/
+Machines/
+
+# Build artifacts
+*.iso
+*.img
+*.qcow2
+*.raw
+out/
+work/
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node / TypeScript
+node_modules/
+*.tsbuildinfo
+
+# Rust
+target/
+**/*.rs.bk
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Secrets
+*.key
+*.pem
+.env
+.env.*

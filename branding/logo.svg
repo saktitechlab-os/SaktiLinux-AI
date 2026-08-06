@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#0b1240"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- outer orbit ring -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#22d3ee" stroke-opacity="0.25" stroke-width="2" stroke-dasharray="6 14"/>
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#c084fc" stroke-opacity="0.15" stroke-width="1.5"/>
+
+  <!-- glow -->
+  <circle cx="256" cy="256" r="140" fill="url(#glow)" filter="url(#soft)"/>
+
+  <!-- petals (lotus - inspiration from Shakti) -->
+  <path d="M256 298 C232 298 216 332 216 372 C216 376 222 380 232 380 C244 380 256 372 256 360 C256 372 268 380 280 380 C290 380 296 376 296 372 C296 332 280 298 256 298 Z" fill="url(#core)" filter="url(#soft)"/>
+  <path d="M256 210 C224 210 202 246 202 294 C202 300 210 306 222 306 C238 306 256 296 256 276 C256 296 274 306 290 306 C302 306 310 300 310 294 C310 246 288 210 256 210 Z" fill="url(#core)"/>
+
+  <!-- core node -->
+  <circle cx="256" cy="256" r="64" fill="url(#core)"/>
+  <circle cx="256" cy="256" r="64" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2"/>
+  <circle cx="256" cy="256" r="44" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2.5" stroke-dasharray="60 28" stroke-linecap="round" transform="rotate(-45 256 256)"/>
+  <circle cx="256" cy="256" r="18" fill="#ffffff" fill-opacity="0.92"/>
+  <circle cx="256" cy="256" r="6" fill="#0f172a"/>
+</svg>

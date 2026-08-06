@@ -1,0 +1,32 @@
+# SaktiLinux — Developer Mode package manifest (Phase 4, staged now)
+# One package per line. # = comment.
+
+git
+docker
+docker-compose
+podman
+nodejs
+npm
+yarn
+pnpm
+rust
+cargo
+go
+python
+python-pip
+python-poetry
+python-virtualenv
+gcc
+clang
+cmake
+make
+mariadb
+postgresql
+redis
+sqlite
+neovim
+tmux
+htop
+btop
+unzip
+zip
