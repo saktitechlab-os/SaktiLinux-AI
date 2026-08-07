@@ -31,14 +31,19 @@
 - [x] Font Awesome SVG icon system (SaktiIcons)
 - [ ] Boot animation refinement (with splash in Phase 15 ISO)
 
-## Phase 3 — AI Brain
+## Phase 3 — AI Brain ✅
 
-- [ ] SaktiAI assistant service (Ollama / llama.cpp)
-- [ ] AI Memory (projects, style, favorites, workspaces, commands)
-- [ ] Voice assistant ("Hey Sakti")
-- [ ] Super + Space shortcut
-- [ ] Natural language → action engine
-- [ ] AI context awareness
+- [x] SaktiAI brain orchestration (`ai/core`, `SaktiBrain`, report pipeline)
+- [x] Natural language → action engine (intent classifier, planner, command
+      translator, action pipeline with allow-listed execution)
+- [x] AI Memory (projects, style, favorites, workspaces, commands)
+- [x] AI context awareness (live system + project + internet context)
+- [x] Voice baseline ("Hey Sakti" wake word + voice engine)
+- [x] Local LLM layer (Ollama/llama.cpp providers, OpenAI-compatible client)
+- [x] Plugin SDK foundation (loader, manifest, sandbox marking)
+- [x] `sakti` CLI + `scripts/sakti-ai` entry point — tagged `v0.3.0-ai-brain`
+- [ ] Assistant service (systemd D-Bus/gRPC) — Phase 3b/GUI integration
+- [ ] Super + Space in-shell integration (AI sidebar → brain)
 
 ## Phase 4 — Developer Mode
 

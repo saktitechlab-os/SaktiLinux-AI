@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# SaktiLinux AI — CLI entry point for the SaktiAI brain
+# Installed to /usr/local/bin/sakti by install-ai.sh
+# Usage: sakti chat "install docker" | status | memory | providers | plugins | wake
+#
+# NOTE: requires the python interpreter from the ai/ venv or the repo:
+#   repo:   scripts/sakti-ai chat "install docker"
+#   system: sakti chat "install docker"
+
+set -Eeuo pipefail
+
+PY="python3"
+if command -v python3 >/dev/null 2>&1; then
+  PY="python3"
+elif command -v python >/dev/null 2>&1; then
+  PY="python"
+else
+  echo "error: python3 not found" >&2
+  exit 1
+fi
+
+SCRIPT_SRC="/usr/share/sakti/ai/cli.py"
+if [[ ! -f "$SCRIPT_SRC" ]]; then
+  # dev fallback: run from repo
+  SCRIPT_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/ai/cli.py"
+fi
+
+exec "$PY" "$SCRIPT_SRC" "$@"

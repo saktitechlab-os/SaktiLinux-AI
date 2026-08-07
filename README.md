@@ -11,11 +11,27 @@ talk to **SaktiAI** — the always-running assistant (Super + Space, or "Hey Sak
 Build the world's most intelligent Linux operating system — AI first, open
 source, offline-first, privacy-first, and beautiful.
 
-## Project Status — Phase 2 (In Progress)
+## Project Status — Phase 3 (Approved)
 
 Phase 1: Architecture, Folder Structure, Branding, Base System ✅
-Phase 2: Desktop Experience, Dynamic Workspace Modes ✅
+Phase 2: Desktop Experience, Dynamic Workspace Modes ✅ — tagged `v0.2.0-desktop`
+Phase 3: SaktiAI Brain ✅ — tagged `v0.3.0-ai-brain`
 See [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
+
+## AI Highlights (Phase 3)
+
+- **SaktiAI brain** (`ai/`) — understand → plan → command → act → verify → report
+  pipeline with intent classifier, planner, strict-mode command allow-list,
+  and action executor (dry-run safe).
+- **Memory** — persistent per-user store (history, projects, commands,
+  preferences) with an in-process event bus.
+- **Context** — live sensing of OS, CPU/RAM, active app, git project, internet.
+- **Voice baseline** — "Hey Sakti" wake word + voice engine.
+- **Local LLM layer** — OpenAI-compatible client (stdlib only), Ollama provider,
+  pluggable provider manager.
+- **Plugin SDK** — plugin base + loader for third-party intents.
+- **CLI** — `sakti chat "install docker"` (or `python -m ai.cli`).
+  See `ai/README.md`.
 
 ## Desktop Highlights (Phase 2)
 

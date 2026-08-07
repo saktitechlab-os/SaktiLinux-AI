@@ -6,6 +6,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.3.0-ai-brain] - 2026-08-07
+
+Tagged release of Phase 3. See [release notes](docs/release-notes/v0.3.0-ai-brain.md).
+
+## [0.3.0] - 2026-08-07
+
+### Phase 3 — SaktiAI Brain
+
+#### Added
+
+- **SaktiAI orchestrator** (`ai/`):
+  - `ai/core/brain.py` — `SaktiBrain` pipeline; DI-driven, testable stages.
+  - `ai/core/intent.py` — rule-based intent classifier (10 intents).
+  - `ai/core/types.py` — domain types (Intent, Plan, Step, ContextSnapshot,
+    ActionResult, ExecutionReport).
+- **Planning** (`ai/planner/`) — `TaskPlanner` per-intent strategies.
+- **Command layer** (`ai/command/`) — `CommandTranslator` with strict-mode
+  allow-list + template substitution.
+- **Actions** (`ai/actions/`) — `CommandRunner` (timeout, dry-run) and
+  `ActionPipeline` (fail-fast / continue, verification).
+- **Memory** (`ai/memory/`) — JSON-backed `MemoryStore` (history, commands,
+  projects, preferences, pinned, workspaces) + `MemoryBus` events.
+- **Context** (`ai/context/`) — `ContextEngine` live sensing (OS, CPU/RAM,
+  active app, git project, internet probe).
+- **Voice** (`ai/voice/`) — `WakeWord` ("Hey Sakti") + `VoiceEngine`.
+- **LLM** (`ai/llm/`) — `LLMClient` (OpenAI-compatible, stdlib-only) +
+  `LLMRegistry`.
+- **Providers** (`ai/providers/`) — `ProviderManager`, `Provider` ABC,
+  `OllamaProvider`.
+- **Plugins** (`ai/plugins/`) — `SaktiPlugin` ABC + `PluginLoader`.
+- **CLI** — `scripts/sakti-ai` + `python -m ai.cli`
+  (`chat`, `status`, `memory`, `providers`, `plugins`, `wake`).
+- **Tests** — 88 tests under `ai/tests/unit` + `ai/tests/integration`.
+- **Docs** — `docs/release-notes/v0.3.0-ai-brain.md`; `ai/README.md`;
+  ROADMAP Phase 3 status.
+
+## [v0.2.0-desktop] - 2026-08-07
+
+Tagged release of Phase 2. See [release notes](docs/release-notes/v0.2.0-desktop.md).
+
 ## [0.2.0] - 2026-08-06
 
 ### Phase 2 — Desktop Experience

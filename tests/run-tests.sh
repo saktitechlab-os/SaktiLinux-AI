@@ -23,6 +23,10 @@ run "python3 $ROOT_DIR/tests/unit/test_structure.py"
 run "python3 $ROOT_DIR/tests/unit/test_packages.py $ROOT_DIR/packages/lists"
 run "python3 $ROOT_DIR/tests/unit/test_desktop.py"
 
+# Phase 3 — AI Brain
+run "python3 -m unittest discover -s $ROOT_DIR/ai/tests/unit"
+run "python3 -m unittest discover -s $ROOT_DIR/ai/tests/integration"
+
 # Shell syntax check for all scripts
 for script in "$ROOT_DIR"/scripts/*.sh "$ROOT_DIR"/scripts/common/*.sh; do
   [[ -f "$script" ]] || continue
