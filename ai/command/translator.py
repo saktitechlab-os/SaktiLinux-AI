@@ -59,6 +59,13 @@ class CommandTranslator:
         return template
 
     def _allowed(self, cmd: str) -> bool:
+        # Reject any command that chains/embeds other commands. A safe
+        # command must be a single, simple invocation — piping, &&/||,
+        # ; separators, command substitution, or backticks can smuggle a
+        # destructive payload past the head-token allow-list.
+        banned = ("|", "&&", "||", ";", "`", "$(", "\n")
+        if any(token in cmd for token in banned):
+            return False
         head = (cmd.split() or [""])[0].lower()
         head = head.replace("\\", "/").split("/")[-1]
         return head in _SAFE_COMMANDS.get(self.os_name, [])

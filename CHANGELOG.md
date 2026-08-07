@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Phase 3 — SaktiAI Brain validation
+
+#### Added
+
+- **Real-world validation suite** (`ai/tests/integration/test_real_execution.py`):
+  - Real subprocess execution (stdout capture, exit codes, pipeline verify)
+  - Failure scenarios: missing executables, non-zero exits, timeouts,
+    empty commands, fail-fast
+  - Unsafe-command blocking with a sentinel-file proof that destructive
+    commands never execute
+
+#### Fixed
+
+- **Command allow-list bypass (security):** the strict-mode translator only
+  checked the first token, so payloads like `echo 'rm -rf /' | bash` or
+  `echo x; rm -rf /` smuggled past it. The allow-list now rejects any
+  command containing `|`, `&&`, `||`, `;`, backticks, `$(`, or newlines.
+
 ## [v0.3.0-ai-brain] - 2026-08-07
 
 Tagged release of Phase 3. See [release notes](docs/release-notes/v0.3.0-ai-brain.md).
