@@ -6,10 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Phase 3 — SaktiAI Brain validation
+### Phase 3 — SaktiAI Brain execution & CLI fixes
 
 #### Added
 
+- **`scripts/sakti-ai` is now a Python entry point** — `python scripts/sakti-ai
+  chat "hello"` (and `./scripts/sakti-ai`, `sakti`) all work. Previously it was
+  a bash script, so `python scripts/sakti-ai` failed with a SyntaxError.
+- **`python -m ai.core`** module entry point (`ai/core/__main__.py`).
+- **Debug logs** on every pipeline stage: request, intent, context, plan
+  steps, translated commands, per-step results, and final message.
+- **Ollama detection** — `chat`/`status`/`providers` report when Ollama is
+  registered but not running, with `ollama serve` guidance.
+- **Conversational fallback for chat intents** (`general`) — answered directly
+  instead of "verification failed".
+- **Error surfacing** — brain pipeline never fails silently; exceptions are
+  caught and printed with a traceback; unknown memory namespaces show a clear
+  error and exit 1.
+- **CLI smoke tests** (`ai/tests/integration/test_cli.py`) execute the real
+  entrypoints: `chat "hello"`, `chat "install docker"`, `status`,
+  `memory list`, `memory list projects`, `python -m ai.cli`, `python -m ai.core`.
 - **Real-world validation suite** (`ai/tests/integration/test_real_execution.py`):
   - Real subprocess execution (stdout capture, exit codes, pipeline verify)
   - Failure scenarios: missing executables, non-zero exits, timeouts,

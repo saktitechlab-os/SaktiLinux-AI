@@ -8,19 +8,41 @@ Receives user input and routes it through the pipeline:
 The Brain is the single entry point used by the CLI, the desktop sidebar
 (Phase 2), and the voice engine. All collaborators are injected (Dependency
 Inversion) so tests can stub any stage.
+
+Behaviour contract:
+- `process()` ALWAYS returns an ExecutionReport with a non-empty `message`.
+- No silent failures: exceptions are caught, logged, and surfaced in the
+  report message.
+- Debug lines are printed to stdout so the CLI shows what the brain did.
+- If Ollama is registered but unreachable, the report says so clearly.
+- If the AI pipeline cannot produce a result, a basic fallback response
+  is returned.
 """
 
 from __future__ import annotations
 
-import dataclasses
 import logging
 import time
+import traceback
 from typing import Dict, Optional
 
 from .intent import IntentClassifier
 from .types import ExecutionReport, Intent, ContextSnapshot
 
 LOG = logging.getLogger(__name__)
+
+# Pure-chat intents: never translated to commands, answered conversationally.
+_CHAT_KINDS = {"general"}
+
+FALLBACK_MESSAGE = (
+    "SaktiAI is running but could not complete that request. "
+    "Try 'install docker', 'create a react app', or 'scan network'."
+)
+
+
+def _debug(*parts) -> None:
+    """Debug output for CLI visibility (never silent)."""
+    print("[sakti]", *parts, flush=True)
 
 
 class SaktiBrain:
@@ -47,38 +69,85 @@ class SaktiBrain:
     # ---------------------------------------------------------- process
     def process(self, text: str, snapshot: Optional[ContextSnapshot] = None,
                 dry_run: bool = True) -> ExecutionReport:
-        """Full pipeline run for one user request."""
+        """Full pipeline run for one user request. Never raises."""
+        _debug("SaktiBrain started; request:", repr(text)[:80])
         report = ExecutionReport()
-        report.intent = self.classifier.classify(text)
+        try:
+            self._pipeline(report, text, snapshot, dry_run)
+        except Exception as exc:  # noqa: BLE001 - must never die silently
+            LOG.exception("brain pipeline crashed")
+            report.message = (f"ERROR: {exc}\n"
+                              f"traceback:\n{traceback.format_exc()}")
+            _debug("BRAIN ERROR:", exc)
+            if not report.message:
+                report.message = FALLBACK_MESSAGE
+        return report
 
-        # Sense context (or accept an injected snapshot).
+    # ----------------------------------------------------------- stages
+    def _pipeline(self, report: ExecutionReport, text: str,
+                  snapshot: Optional[ContextSnapshot],
+                  dry_run: bool) -> None:
+        # 1. Intent
+        report.intent = self.classifier.classify(text)
+        _debug("intent detected:", report.intent.kind.value,
+               f"(confidence={report.intent.confidence:.2f})")
+
+        # 2. Context
         if self.context_engine is not None:
             report.context = snapshot or self.context_engine.capture()
         else:
             report.context = snapshot or ContextSnapshot()
+        _debug("context: cwd=", report.context.cwd or "(none)",
+               "project=", report.context.active_project or "(none)")
 
-        # Plan the task.
+        # 2b. Chat-like intents: answer directly, no command execution.
+        if report.intent.kind.value in _CHAT_KINDS:
+            report.message = self._chat_reply(report.intent)
+            report.finished_at = time.time()
+            _debug("chat reply:", report.message[:80])
+            return
+
+        # 3. Plan
         if self.planner is not None:
             report.plan = self.planner.plan(report.intent, report.context)
+            _debug(f"plan: {len(report.plan.steps)} step(s)")
+            for step in report.plan.steps:
+                _debug(f"  step {step.order}: {step.description} "
+                       f"-> {step.command or '(no command)'}")
+        else:
+            report.message = (f"Understood intent: "
+                              f"{report.intent.kind.value}, but no planner "
+                              f"is attached.")
+            report.finished_at = time.time()
+            return
 
-        # Translate plan steps to concrete commands.
+        # 4. Commands
         commands: Dict[int, str] = {}
-        if self.command_engine is not None and report.plan is not None:
-            commands = self.command_engine.translate(report.plan, report.context)
+        if self.command_engine is not None:
+            commands = self.command_engine.translate(report.plan,
+                                                     report.context)
+            _debug("commands translated:",
+                   {k: (v or "(blocked/empty)") for k, v in commands.items()})
 
-        # Execute via the action pipeline.
+        # 5. Execute
         if self.action_pipeline is not None:
             report.results = self.action_pipeline.execute(
                 report.intent, report.plan, commands, dry_run=dry_run)
             report.verified = self.action_pipeline.verify(report.results)
+            _debug(f"execution: {len(report.results)} result(s), "
+                   f"verified={report.verified}")
+            for result in report.results:
+                _debug("  result:", "OK" if result.success else "FAIL",
+                       "exit=", result.exit_code,
+                       result.stdout[:60] if result.stdout else "")
 
-        # Persist memory: remember what we did.
+        # 6. Memory
         if self.memory_store is not None:
             self._remember(report)
 
         report.finished_at = time.time()
         report.message = self._summarize(report)
-        return report
+        _debug("final message:", report.message[:120])
 
     # ----------------------------------------------------------- memory
     def _remember(self, report: ExecutionReport) -> None:
@@ -98,22 +167,43 @@ class SaktiBrain:
                     store.add_recent_command(step.command)
 
     # -------------------------------------------------------- reporting
-    @staticmethod
-    def _summarize(report: ExecutionReport) -> str:
+    def _chat_reply(self, intent: Intent) -> str:
+        return (
+            "Hello! I'm SaktiAI, your Linux AI assistant. "
+            "I can install apps, create projects, scan networks, organize "
+            "files, deploy sites, and more. "
+            "Try something like: 'install docker', 'create a react app', "
+            "or 'scan network'."
+        )
+
+    def _summarize(self, report: ExecutionReport) -> str:
         if not report.plan:
-            return f"Understood intent: {report.intent.kind.value if report.intent else '?'} (no planner attached)."
+            return (f"Understood intent: "
+                    f"{report.intent.kind.value if report.intent else '?'} "
+                    f"(no planner attached).")
         if report.verified:
             return (f"Completed {len(report.results)} step(s) successfully "
                     f"in {round(report.duration_ms, 1)} ms.")
-        return (f"Executed {len(report.results)} step(s); verification failed "
-                f"or dry-run only.")
+        blocked = [i + 1 for i, r in enumerate(report.results)
+                   if not r.success]
+        return (f"Executed {len(report.results)} step(s); "
+                f"{len(blocked)} failed or blocked (steps "
+                f"{blocked or 'none'}). Dry-run={report.results[0].dry_run if report.results else False}. "
+                f"Run with --verbose for details.")
 
     def status(self) -> Dict[str, object]:
         """Health/status payload for UIs and the desktop sidebar."""
+        llm_ok = False
+        if self.provider_manager is not None:
+            try:
+                llm_ok = bool(self.provider_manager.available_providers())
+            except Exception:
+                llm_ok = False
         return {
             "engine": "sakti-brain",
             "version": __import__("ai", fromlist=["__version__"]).__version__,
             "ready": True,
+            "ollama_running": llm_ok,
             "modules": {
                 "context": self.context_engine is not None,
                 "planner": self.planner is not None,

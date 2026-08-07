@@ -30,6 +30,22 @@ from ai.providers import ProviderManager
 from ai.voice import VoiceEngine, WakeWord
 
 
+def _check_ollama(brain: SaktiBrain) -> None:
+    """Show a clear message when Ollama is registered but not running."""
+    if brain.provider_manager is None:
+        return
+    try:
+        running = brain.provider_manager.available_providers()
+    except Exception as exc:
+        print(f"[sakti] warning: could not check AI providers: {exc}",
+              file=sys.stderr)
+        return
+    if not running:
+        print("[sakti] note: Ollama is not running — "
+              "using offline rule-based mode. Start it with `ollama serve` "
+              "to enable local LLM replies.", file=sys.stderr)
+
+
 def _brain() -> SaktiBrain:
     return SaktiBrain(
         context_engine=ContextEngine(),
@@ -43,29 +59,55 @@ def _brain() -> SaktiBrain:
 
 def _cmd_chat(args) -> int:
     brain = _brain()
+    _check_ollama(brain)
     report = brain.process(args.text, dry_run=args.dry_run)
     print(report.message)
     if args.verbose:
         print(json.dumps(report.to_dict(), indent=2))
-    return 0
+    return 0 if not report.message.startswith("ERROR") else 1
 
 
 def _cmd_status(args) -> int:
-    print(json.dumps(_brain().status(), indent=2))
+    brain = _brain()
+    status = brain.status()
+    print(f"sakti-ai {status['version']}  engine={status['engine']}  "
+          f"ready={status['ready']}")
+    print(f"Ollama running: {status['ollama_running']}")
+    if not status["ollama_running"]:
+        print("  -> start it with `ollama serve` for AI-powered replies")
+    print("modules:")
+    for name, loaded in status["modules"].items():
+        print(f"  {name}: {'on' if loaded else 'off'}")
     return 0
 
 
 def _cmd_memory(args) -> int:
     store = MemoryStore()
+    # Parse flexible syntax: `memory`, `memory list`, `memory <namespace>`,
+    # `memory list <namespace>`.
     namespace = args.namespace or "history"
-    data = store.list(namespace)
-    print(f"{namespace} ({len(data)} entries)")
-    for key, value in list(data.items())[: args.limit]:
-        if namespace in ("history", "recent_commands"):
-            for entry in value.get("entries", [])[-args.limit:]:
-                print(f"  - {entry.get('value')}")
-        else:
-            print(f"  {key}: {json.dumps(value) if not isinstance(value, (str, int, float)) else value}")
+    if namespace == "list":
+        namespace = args.namespace2 or "history"
+
+    if namespace not in store._namespaces:
+        print(f"[sakti] error: unknown namespace '{namespace}'. "
+              f"Valid: {', '.join(sorted(store._namespaces))}", file=sys.stderr)
+        return 1
+
+    log_kinds = ("history", "recent_commands")
+    if namespace in log_kinds:
+        entries = store.list(namespace).get("entries", [])
+        print(f"{namespace} ({len(entries)} entries)")
+        for entry in entries[-args.limit:]:
+            print(f"  - {entry.get('value')}")
+    else:
+        data = store.list(namespace)
+        print(f"{namespace} ({len(data)} entries)")
+        for key, value in list(data.items())[: args.limit]:
+            if not isinstance(value, (str, int, float)):
+                print(f"  {key}: {json.dumps(value)}")
+            else:
+                print(f"  {key}: {value}")
     return 0
 
 
@@ -75,6 +117,9 @@ def _cmd_providers(args) -> int:
     available = mgr.available_providers()
     print("registered:", ", ".join(all_providers) or "(none)")
     print("available: ", ", ".join(available) or "(none)")
+    if all_providers and not available:
+        print("  -> Ollama is registered but not running. Start it with "
+              "`ollama serve`.", file=sys.stderr)
     return 0
 
 
@@ -100,7 +145,8 @@ def _cmd_wake(args) -> int:
 
 def _main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="sakti", description="SaktiAI CLI")
-    parser.add_argument("--version", action="version", version=f"sakti-ai {__version__}")
+    parser.add_argument("--version", action="version",
+                        version=f"sakti-ai {__version__}")
     sub = parser.add_subparsers(dest="command")
 
     p_chat = sub.add_parser("chat", help="run a request through the brain")
@@ -114,6 +160,8 @@ def _main(argv=None) -> int:
 
     p_mem = sub.add_parser("memory", help="inspect memory")
     p_mem.add_argument("namespace", nargs="?", default="history")
+    p_mem.add_argument("namespace2", nargs="?", default=None,
+                       help="namespace used after 'memory list'")
     p_mem.add_argument("--limit", type=int, default=10)
     p_mem.set_defaults(func=_cmd_memory)
 

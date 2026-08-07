@@ -1,28 +1,48 @@
-#!/usr/bin/env bash
-# SaktiLinux AI — CLI entry point for the SaktiAI brain
-# Installed to /usr/local/bin/sakti by install-ai.sh
-# Usage: sakti chat "install docker" | status | memory | providers | plugins | wake
-#
-# NOTE: requires the python interpreter from the ai/ venv or the repo:
-#   repo:   scripts/sakti-ai chat "install docker"
-#   system: sakti chat "install docker"
+#!/usr/bin/env python3
+"""SaktiLinux AI — CLI entry point for the SaktiAI brain.
 
-set -Eeuo pipefail
+Runnable every way:
+    python scripts/sakti-ai chat "hello"
+    python scripts/sakti-ai status
+    python scripts/sakti-ai memory list
+    ./scripts/sakti-ai chat "hello"          # POSIX (uses the shebang)
+    sakti chat "hello"                       # when installed system-wide
 
-PY="python3"
-if command -v python3 >/dev/null 2>&1; then
-  PY="python3"
-elif command -v python >/dev/null 2>&1; then
-  PY="python"
-else
-  echo "error: python3 not found" >&2
-  exit 1
-fi
+System install keeps a POSIX wrapper at /usr/local/bin/sakti that execs
+this file; this file itself is pure Python so `python scripts/sakti-ai`
+works from the repo too.
+"""
 
-SCRIPT_SRC="/usr/share/sakti/ai/cli.py"
-if [[ ! -f "$SCRIPT_SRC" ]]; then
-  # dev fallback: run from repo
-  SCRIPT_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/ai/cli.py"
-fi
+from __future__ import annotations
 
-exec "$PY" "$SCRIPT_SRC" "$@"
+import os
+import runpy
+import sys
+
+
+def _resolve_cli() -> str:
+    """Return the path to the real CLI module.
+
+    Installed layout: /usr/share/sakti/ai/cli.py
+    Repo layout:      <repo>/ai/cli.py
+    """
+    installed = "/usr/share/sakti/ai/cli.py"
+    if os.path.isfile(installed):
+        return installed
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(here, "..", "ai", "cli.py")
+
+
+def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    cli_path = os.path.normpath(_resolve_cli())
+    if not os.path.isfile(cli_path):
+        print(f"[sakti] error: cannot find {cli_path}", file=sys.stderr)
+        return 1
+    sys.argv = [cli_path] + argv
+    runpy.run_path(cli_path, run_name="__main__")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
