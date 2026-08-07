@@ -18,6 +18,7 @@ class IntentKind(str, Enum):
     """High-level intents the classifier can recognise."""
 
     INSTALL = "install"            # install an application / tool
+    INSTALL_DEPENDENCY = "install_dependency"  # add a dependency/package to a project
     CREATE = "create"              # scaffold a project
     BUILD = "build"                # compile/build Android/app/project
     DEPLOY = "deploy"              # deploy website or service
@@ -25,6 +26,9 @@ class IntentKind(str, Enum):
     ORGANIZE = "organize"          # file/directory housekeeping
     SEARCH = "search"              # ai search across files/web
     RUN = "run"                    # launch/run an app or command
+    RUN_PROJECT = "run_project"    # start the current/dev project
+    FIX_ERROR = "fix_error"        # diagnose & fix an error/bug
+    GIT_COMMIT = "git_commit"      # commit current changes
     SYSTEM = "system"              # system status/info
     GENERAL = "general"            # free-form natural language
 

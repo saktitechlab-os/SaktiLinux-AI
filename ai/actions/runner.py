@@ -28,7 +28,8 @@ class CommandRunner:
         self.timeout = timeout_seconds
         self._shell = shell if shell is not None else (sys.platform == "win32")
 
-    def run(self, command: str, dry_run: bool = False) -> ActionResult:
+    def run(self, command: str, dry_run: bool = False,
+            cwd: Optional[str] = None) -> ActionResult:
         if not command:
             return ActionResult.fail("empty command", exit_code=-1)
         if dry_run:
@@ -43,6 +44,7 @@ class CommandRunner:
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
+                cwd=cwd,
             )
             ok = proc.returncode == 0
             return ActionResult(

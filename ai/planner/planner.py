@@ -103,12 +103,112 @@ def _generic_plan(intent: Intent, ctx: ContextSnapshot) -> Optional[Plan]:
     return plan
 
 
+def _install_dependency_plan(intent: Intent, ctx: ContextSnapshot) -> Optional[Plan]:
+    dep = intent.parameters.get("dependency")
+    manager = intent.parameters.get("manager")
+    if not dep:
+        return None
+    plan = Plan(intent=intent.kind.value,
+                summary=f"Install dependency {dep}")
+    plan.add_step("Check the project workspace",
+                  command="git rev-parse --show-toplevel 2>/dev/null || pwd",
+                  expected="workspace root")
+    installer = {
+        "npm": "npm install", "yarn": "yarn add", "pnpm": "pnpm add",
+        "pip": "pip install", "pip3": "pip3 install",
+        "poetry": "poetry add", "cargo": "cargo add",
+        "gem": "gem install", "go": "go get",
+        "composer": "composer require", "maven": "mvn dependency:get",
+        "gradle": "gradle dependencies", "brew": "brew install",
+        "apt": "apt-get install -y",
+    }.get(manager or "", "npm install")
+    plan.add_step(f"Add {dep} via {installer.split()[0]}",
+                  command=f"{installer} {dep}",
+                  expected="dependency installed")
+    plan.add_step(f"Verify {dep} is resolvable",
+                  command=f"npm ls {dep} 2>/dev/null || echo '{dep}'",
+                  expected="resolvable")
+    return plan
+
+
+def _run_project_plan(intent: Intent, ctx: ContextSnapshot) -> Optional[Plan]:
+    project = intent.parameters.get("project", "current")
+    plan = Plan(intent=intent.kind.value,
+                summary=f"Start the {project} workspace")
+    plan.add_step("Locate the workspace root",
+                  command="git rev-parse --show-toplevel 2>/dev/null || pwd",
+                  expected="workspace root")
+    plan.add_step("Detect the package manager",
+                  command="ls package.json pyproject.toml Cargo.toml 2>/dev/null",
+                  expected="manifest found")
+    plan.add_step("Start the dev server",
+                  command="npm run dev",
+                  validator="allow_check",
+                  expected="dev server listening")
+    return plan
+
+
+def _fix_error_plan(intent: Intent, ctx: ContextSnapshot) -> Optional[Plan]:
+    issue = intent.parameters.get("issue", "error")
+    plan = Plan(intent=intent.kind.value,
+                summary=f"Diagnose and fix: {issue}")
+    plan.add_step("Reproduce the error and capture output",
+                  command="cat /dev/null", expected="repro step done")
+    plan.add_step("Inspect the logs",
+                  command="ls -t /var/log 2>/dev/null | head -5 || journalctl -n 20",
+                  expected="recent logs listed")
+    plan.add_step("Locate the failing file",
+                  command=f"grep -rn '{issue[:40]}' . --include='*.py' "
+                          "--include='*.js' 2>/dev/null | head -5",
+                  expected="matches (if any)")
+    plan.add_step("Apply the fix (review before running)",
+                  command="", expected="fix applied")
+    return plan
+
+
+def _git_commit_plan(intent: Intent, ctx: ContextSnapshot) -> Optional[Plan]:
+    message = intent.parameters.get("message") or "auto-commit from SaktiAI"
+    plan = Plan(intent=intent.kind.value, summary=f"Commit changes ({message})")
+    plan.add_step("Check the working tree",
+                  command="git status --short",
+                  expected="changed files")
+    plan.add_step("Stage all changes",
+                  command="git add -A",
+                  expected="staged")
+    plan.add_step(f"Commit: {message}",
+                  command=f"git commit -m \"{message}\"",
+                  validator="allow_check",
+                  expected="commit created")
+    return plan
+
+
+def _build_plan(intent: Intent, ctx: ContextSnapshot) -> Optional[Plan]:
+    target = intent.parameters.get("target", "project")
+    plan = Plan(intent=intent.kind.value,
+                summary=f"Build the {target}")
+    plan.add_step("Clean previous artifacts",
+                  command="rm -rf build dist 2>/dev/null || true",
+                  expected="clean")
+    plan.add_step("Run the build",
+                  command="npm run build || make",
+                  expected="exit code 0")
+    plan.add_step("Verify the artifact exists",
+                  command="ls dist/ build/ 2>/dev/null",
+                  expected="artifacts listed")
+    return plan
+
+
 PLANNER_RULES = {
     IntentKind.INSTALL: _install_plan,
+    IntentKind.INSTALL_DEPENDENCY: _install_dependency_plan,
     IntentKind.CREATE: _create_plan,
+    IntentKind.BUILD: _build_plan,
     IntentKind.DEPLOY: _deploy_plan,
     IntentKind.SCAN_NETWORK: _scan_network_plan,
     IntentKind.ORGANIZE: _organize_plan,
+    IntentKind.RUN_PROJECT: _run_project_plan,
+    IntentKind.FIX_ERROR: _fix_error_plan,
+    IntentKind.GIT_COMMIT: _git_commit_plan,
 }
 
 

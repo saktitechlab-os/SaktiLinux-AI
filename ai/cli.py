@@ -4,6 +4,10 @@
 Usage:
     python3 -m ai.cli chat "install docker" [--dry-run]
     python3 -m ai.cli status
+    python3 -m ai.cli dev status [--path DIR]
+    python3 -m ai.cli dev run [--path DIR] [--script NAME] [--arguments ...]
+    python3 -m ai.cli dev install <dependency> [--path DIR] [--manager M]
+    python3 -m ai.cli dev build [--path DIR]
     python3 -m ai.cli memory list [namespace]
     python3 -m ai.cli providers list
     python3 -m ai.cli plugins list
@@ -23,6 +27,7 @@ from ai.actions import ActionPipeline
 from ai.command import CommandTranslator
 from ai.context import ContextEngine
 from ai.core import SaktiBrain
+from ai.dev import DevCommandEngine
 from ai.memory import MemoryStore
 from ai.planner import TaskPlanner
 from ai.plugins import PluginLoader
@@ -143,6 +148,58 @@ def _cmd_wake(args) -> int:
     return 1
 
 
+def _print_dev_result(result) -> int:
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(f"[sakti] stderr: {result.stderr}", file=sys.stderr)
+    if not result.success:
+        print(f"[sakti] dev command failed "
+              f"(exit {result.exit_code}): {result.stderr or result.stdout}",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
+def _dev_engine(args) -> DevCommandEngine:
+    return DevCommandEngine()
+
+
+def _cmd_dev_run(args) -> int:
+    engine = _dev_engine(args)
+    result = engine.run_project(args.path, script=args.script,
+                                args=args.arguments)
+    return _print_dev_result(result)
+
+
+def _cmd_dev_install(args) -> int:
+    engine = _dev_engine(args)
+    result = engine.install_dependency(args.dependency, path=args.path,
+                                       manager=args.manager)
+    return _print_dev_result(result)
+
+
+def _cmd_dev_build(args) -> int:
+    engine = _dev_engine(args)
+    result = engine.build_project(args.path)
+    return _print_dev_result(result)
+
+
+def _cmd_dev_status(args) -> int:
+    engine = _dev_engine(args)
+    ctx = engine.status(args.path)
+    print(f"project type:    {ctx.project_type}")
+    print(f"language:        {ctx.language}")
+    print(f"framework:       {ctx.framework}")
+    print(f"package manager: {ctx.package_manager}")
+    print(f"name:            {ctx.name or '(unnamed)'}")
+    print(f"root:            {ctx.root or '(none)'}")
+    if not ctx.detected:
+        print("  -> no supported project (Node.js / Python / PHP) found")
+        return 1
+    return 0
+
+
 def _main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="sakti", description="SaktiAI CLI")
     parser.add_argument("--version", action="version",
@@ -157,6 +214,30 @@ def _main(argv=None) -> int:
 
     p_status = sub.add_parser("status", help="show brain status")
     p_status.set_defaults(func=_cmd_status)
+
+    p_dev = sub.add_parser("dev", help="developer commands")
+    dev_sub = p_dev.add_subparsers(dest="dev_action")
+
+    p_dev_run = dev_sub.add_parser("run", help="run the project")
+    p_dev_run.add_argument("--path", default=None, help="project directory")
+    p_dev_run.add_argument("--script", default=None, help="npm script name")
+    p_dev_run.add_argument("--arguments", default=None, help="extra args")
+    p_dev_run.set_defaults(func=_cmd_dev_run)
+
+    p_dev_install = dev_sub.add_parser("install", help="install a dependency")
+    p_dev_install.add_argument("dependency")
+    p_dev_install.add_argument("--path", default=None, help="project directory")
+    p_dev_install.add_argument("--manager", default=None,
+                               help="force package manager (npm, pip, ...)")
+    p_dev_install.set_defaults(func=_cmd_dev_install)
+
+    p_dev_build = dev_sub.add_parser("build", help="build the project")
+    p_dev_build.add_argument("--path", default=None, help="project directory")
+    p_dev_build.set_defaults(func=_cmd_dev_build)
+
+    p_dev_status = dev_sub.add_parser("status", help="show project info")
+    p_dev_status.add_argument("--path", default=None, help="project directory")
+    p_dev_status.set_defaults(func=_cmd_dev_status)
 
     p_mem = sub.add_parser("memory", help="inspect memory")
     p_mem.add_argument("namespace", nargs="?", default="history")

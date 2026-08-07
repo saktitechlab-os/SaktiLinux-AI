@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Phase 4A — Developer Core
+
+#### Added
+
+- **`ai/dev/` Developer Core** — real developer workflows, no placeholders:
+  - `DevContextDetector` (`ai/dev/detector.py`) — filesystem project sniffing
+    for Node.js, Python, and PHP: project type, language (javascript /
+    python / php), framework (react, next, vite, vue, express, django,
+    fastapi, flask, laravel, symfony, ...), and package manager (npm, yarn,
+    pnpm, bun, pip, poetry, uv, composer) from manifests and lockfiles.
+  - `DevCommandEngine` (`ai/dev/engine.py`) — real execution of the three
+    required developer commands:
+    - `run_project` — dev-server/npm script, python entry (main/manage/app),
+      php built-in server; runs from the detected project root.
+    - `install_dependency` — right installer per ecosystem (`npm install`,
+      `yarn add`, `pip install` via the running interpreter, `composer
+      require`, ...) with validated command construction.
+    - `build_project` — npm build script, `python -m compileall`, composer
+      install.
+  - `CommandRunner` gained per-call `cwd` support so commands run inside the
+    project (not the host process directory).
+- **CLI** — `sakti-ai dev status|run|install|build`:
+  - `sakti-ai dev status [--path DIR]` — prints detected type / language /
+    framework / package manager / name / root.
+  - `sakti-ai dev run [--path DIR] [--script NAME] [--arguments ...]`
+  - `sakti-ai dev install <dependency> [--path DIR] [--manager M]`
+  - `sakti-ai dev build [--path DIR]`
+- **Tests** — 34 new tests (23 unit `ai/tests/unit/test_dev.py` + 11
+  integration `ai/tests/integration/test_dev_execution.py`) covering
+  detection across all three ecosystems and lockfiles, command
+  construction, unsupported-project failures, and **real** execution
+  (node/npm guarded by availability; real pip install of `six`; compileall;
+  CLI end-to-end).
+- **Intent classifier hardened** (from the Phase-3→4 review): fixed the
+  package-manager capture group (`_extract_dep`), the `dev server` run
+  pattern (braces were interpolated away by an f-string), and re-anchored
+  generic `install`/`build` targets.
+- Version bumped to **0.4.0**.
+
 ### Phase 3 — SaktiAI Brain execution & CLI fixes
 
 #### Added
