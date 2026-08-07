@@ -24,7 +24,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from ai.actions.runner import CommandRunner
-from ai.dev import DevCommandEngine
+from ai.dev import DevCommandEngine, DevHistory
 
 
 def _which(name: str) -> bool:
@@ -282,6 +282,73 @@ class TestSafetyAndHints(unittest.TestCase):
             self.assertNotIn("[sakti] will run:", proc.stdout)
         finally:
             shutil.rmtree(d, ignore_errors=True)
+
+
+class TestDevHistoryCli(unittest.TestCase):
+    """`sakti-ai dev history` and `sakti-ai dev replay` end-to-end."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="sakti_cli_hist_")
+        self.data = tempfile.mkdtemp(prefix="sakti_hist_data_")
+        with open(os.path.join(self.dir, "main.py"), "w") as fh:
+            fh.write("print('cli-hist-ok')\n")
+        with open(os.path.join(self.dir, "pyproject.toml"), "w") as fh:
+            fh.write('[project]\nname = "h"\n')
+        open(os.path.join(self.dir, "requirements.txt"), "w").close()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+        shutil.rmtree(self.data, ignore_errors=True)
+
+    def _env(self):
+        env = dict(os.environ)
+        env["PYTHONPATH"] = ROOT + os.pathsep + env.get("PYTHONPATH", "")
+        env["XDG_DATA_HOME"] = self.data
+        return env
+
+    def _cli(self, *args):
+        return subprocess.run(
+            [sys.executable, "-m", "ai.cli", "dev", *args],
+            capture_output=True, text=True, cwd=self.dir, env=self._env())
+
+    def test_history_shows_recorded_command(self):
+        self.assertEqual(self._cli("run").returncode, 0)
+        proc = self._cli("history")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("dev history (1 of last 50)", proc.stdout)
+        self.assertIn("main.py", proc.stdout)
+        self.assertIn("ok", proc.stdout)
+
+    def test_history_empty_before_any_command(self):
+        proc = self._cli("history")
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("no dev commands recorded", proc.stdout)
+
+    def test_replay_runs_stored_command(self):
+        self.assertEqual(self._cli("run").returncode, 0)
+        proc = self._cli("replay", "1")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("cli-hist-ok", proc.stdout)
+        # replay is itself recorded
+        hist = self._cli("history")
+        self.assertIn("replay", hist.stdout)
+
+    def test_replay_unknown_id_fails(self):
+        proc = self._cli("replay", "999")
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("no history entry", proc.stderr)
+
+    def test_replay_dry_does_not_execute(self):
+        marker = os.path.join(self.dir, "marker.txt")
+        with open(os.path.join(self.dir, "write.py"), "w") as fh:
+            fh.write(f"open(r'{marker}','w').write('x')\n")
+        with open(os.path.join(self.dir, "main.py"), "w") as fh:
+            fh.write(f"open(r'{marker}','w').write('x')\n")
+        self.assertEqual(self._cli("run").returncode, 0)
+        # now a dry replay must not run the side-effect command
+        proc = self._cli("replay", "1", "--dry")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("[dry-run]", proc.stdout)
 
 
 if __name__ == "__main__":

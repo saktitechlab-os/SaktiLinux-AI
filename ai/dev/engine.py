@@ -33,6 +33,7 @@ from ..actions.runner import CommandRunner
 from ..core.types import ActionResult
 from .detector import DevContext, DevContextDetector
 from .errors import diagnose
+from .history import DevHistory, STATUS_DRY, STATUS_FAIL, STATUS_SUCCESS
 
 
 def _python_cmd(*parts: str) -> str:
@@ -50,15 +51,43 @@ class DevCommandEngine:
     def __init__(self, detector: Optional[DevContextDetector] = None,
                  runner: Optional[CommandRunner] = None,
                  confirm: Optional[Callable[[str, str], bool]] = None,
-                 live: bool = False) -> None:
+                 live: bool = False,
+                 history: Optional[DevHistory] = None) -> None:
         self.detector = detector or DevContextDetector()
         self.runner = runner or CommandRunner()
         self.confirm = confirm
         self.live = live
+        self.history = history
 
     # ------------------------------------------------------------ api
     def status(self, path: Optional[str] = None) -> DevContext:
         return self.detector.detect(path)
+
+    def history_list(self, limit: Optional[int] = None) -> List[dict]:
+        if self.history is None:
+            return []
+        return self.history.list(limit)
+
+    def replay(self, entry_id: int,
+               dry_run: bool = False,
+               live: Optional[bool] = None) -> ActionResult:
+        """Re-run a previously recorded command by its history id."""
+        if self.history is None:
+            return ActionResult.fail("no history store attached", exit_code=-5)
+        entry = self.history.get(int(entry_id))
+        if entry is None:
+            return ActionResult.fail(
+                f"no history entry with id {entry_id}", exit_code=-5)
+        command = entry.get("command") or ""
+        if not command:
+            return ActionResult.fail(
+                f"history entry {entry_id} has no command", exit_code=-5)
+        action = entry.get("action") or "replay"
+        cwd = entry.get("cwd") or ""
+        ctx = DevContext(root=cwd, project_type="unknown")
+        return self._execute(ctx, "replay",
+                             f"replay #{entry_id} ({action})",
+                             [command], dry_run=dry_run, live=live)
 
     def run_project(self, path: Optional[str] = None,
                     script: Optional[str] = None,
@@ -174,6 +203,15 @@ class DevCommandEngine:
                 result.stderr = f"{result.stderr}\n[fix] {hint}".strip()
         result.stdout = f"[{action}] {label}\n{result.stdout}".strip() \
             if result.stdout else f"[{action}] {label}: (no output)"
+        if self.history is not None:
+            self.history.add(
+                command=command,
+            action=action,
+            cwd=cwd,
+            status=(STATUS_DRY if dry_run else
+                    STATUS_SUCCESS if result.success else STATUS_FAIL),
+            exit_code=result.exit_code,
+        )
         return result
 
 

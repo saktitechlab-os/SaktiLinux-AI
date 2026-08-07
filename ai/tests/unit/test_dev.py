@@ -12,7 +12,7 @@ ROOT = os.path.dirname(os.path.dirname(
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from ai.dev import DevCommandEngine, DevContextDetector
+from ai.dev import DevCommandEngine, DevContextDetector, DevHistory
 from ai.dev.errors import diagnose
 
 
@@ -323,6 +323,129 @@ class TestErrorDiagnosis(unittest.TestCase):
 
     def test_success_returns_none(self):
         self.assertIsNone(diagnose("echo hi", 0, "hi", ""))
+
+
+class TestDevHistory(unittest.TestCase):
+    """The JSON-backed store: timestamps, status, cap, persistence."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="sakti_hist_")
+        self.path = os.path.join(self.dir, "dev_history.json")
+        self.store = DevHistory(path=self.path, limit=3)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_add_records_status_and_timestamp(self):
+        entry_id = self.store.add("npm run dev", "run", "/p", "success", 0)
+        entry = self.store.get(entry_id)
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["command"], "npm run dev")
+        self.assertEqual(entry["status"], "success")
+        self.assertEqual(entry["exit_code"], 0)
+        self.assertTrue(entry["timestamp"])
+        self.assertGreater(entry["ts"], 0)
+
+    def test_fail_status_recorded(self):
+        entry_id = self.store.add("bad-cmd", "build", "", "fail", 1)
+        self.assertEqual(self.store.get(entry_id)["status"], "fail")
+
+    def test_dry_run_status_recorded(self):
+        entry_id = self.store.add("echo x", "run", "", "dry-run", 0)
+        self.assertEqual(self.store.get(entry_id)["status"], "dry-run")
+
+    def test_cap_trims_oldest(self):
+        ids = [self.store.add(f"cmd-{i}", "run", "", "success", 0)
+               for i in range(6)]
+        entries = self.store.list()
+        self.assertEqual(len(entries), 3)
+        newest = entries[0]
+        self.assertEqual(newest["command"], "cmd-5")
+        # oldest id may still be readable if kept; trimmed ones gone
+        self.assertIsNone(self.store.get(ids[0]))
+        self.assertIsNotNone(self.store.get(ids[-1]))
+
+    def test_list_is_newest_first(self):
+        for i in range(3):
+            self.store.add(f"cmd-{i}", "run", "", "success", 0)
+        entries = self.store.list()
+        self.assertEqual([e["id"] for e in entries], [3, 2, 1])
+
+    def test_persistence_across_reload(self):
+        self.store.add("persist-this", "install", "/p", "success", 0)
+        reloaded = DevHistory(path=self.path, limit=3)
+        entries = reloaded.list()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["command"], "persist-this")
+
+    def test_clear_empties(self):
+        self.store.add("x", "run", "", "success", 0)
+        self.store.clear()
+        self.assertEqual(len(self.store), 0)
+        self.assertEqual(self.store.list(), [])
+
+
+class TestDevHistoryRecording(unittest.TestCase):
+    """Engine writes every executed command to its history store."""
+
+    def setUp(self):
+        self.fx = Fixture()
+        self.dir = tempfile.mkdtemp(prefix="sakti_hist_rec_")
+        self.store = DevHistory(path=os.path.join(self.dir, "h.json"),
+                                limit=50)
+        self.runner = _RecordingRunner()
+        self.engine = DevCommandEngine(runner=self.runner,
+                                       history=self.store)
+
+    def tearDown(self):
+        self.fx.destroy()
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_engine_records_run(self):
+        d = self.fx.node(scripts={"dev": "vite"})
+        self.engine.run_project(d)
+        entries = self.store.list()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["action"], "run")
+        self.assertEqual(entries[0]["status"], "success")
+        self.assertIn("npm run dev", entries[0]["command"])
+
+    def test_engine_records_install(self):
+        d = self.fx.node()
+        self.engine.install_dependency("lodash", path=d,
+                                       confirm=lambda dep, cmd: True)
+        entries = self.store.list()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["action"], "install")
+        self.assertEqual(entries[0]["command"], "npm install lodash")
+
+    def test_replay_runs_stored_command(self):
+        d = self.fx.node(scripts={"dev": "vite"})
+        self.engine.run_project(d)
+        entry_id = self.store.list()[0]["id"]
+        self.engine.replay(entry_id)
+        self.assertEqual(len(self.store.list()), 2)
+        self.assertEqual(self.store.list()[0]["action"], "replay")
+        self.assertIn("npm run dev", self.store.list()[0]["command"])
+
+    def test_replay_unknown_id_fails(self):
+        result = self.engine.replay(999)
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, -5)
+
+    def test_replay_dry_run_records_dry(self):
+        d = self.fx.node(scripts={"dev": "vite"})
+        self.engine.run_project(d)
+        entry_id = self.store.list()[0]["id"]
+        self.engine.replay(entry_id, dry_run=True)
+        self.assertEqual(self.store.list()[0]["status"], "dry-run")
+
+    def test_no_history_store_still_runs(self):
+        engine = DevCommandEngine(runner=self.runner)
+        d = self.fx.node(scripts={"dev": "vite"})
+        result = engine.run_project(d)
+        self.assertTrue(result.success)
+        self.assertEqual(engine.history_list(), [])
 
 
 if __name__ == "__main__":

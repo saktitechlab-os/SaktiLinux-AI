@@ -8,6 +8,8 @@ Usage:
     python3 -m ai.cli dev run [--path DIR] [--script NAME] [--dry] [--no-live]
     python3 -m ai.cli dev install <dependency> [--yes] [--dry] [--manager M]
     python3 -m ai.cli dev build [--path DIR] [--dry]
+    python3 -m ai.cli dev history [--limit N]
+    python3 -m ai.cli dev replay <id> [--dry]
     python3 -m ai.cli memory list [namespace]
     python3 -m ai.cli providers list
     python3 -m ai.cli plugins list
@@ -27,7 +29,7 @@ from ai.actions import ActionPipeline
 from ai.command import CommandTranslator
 from ai.context import ContextEngine
 from ai.core import SaktiBrain
-from ai.dev import DevCommandEngine
+from ai.dev import DevCommandEngine, DevHistory
 from ai.memory import MemoryStore
 from ai.planner import TaskPlanner
 from ai.plugins import PluginLoader
@@ -165,7 +167,9 @@ def _print_dev_result(result) -> int:
 
 
 def _dev_engine(args) -> DevCommandEngine:
-    return DevCommandEngine(live=not getattr(args, "no_live", False))
+    hist = DevHistory()
+    return DevCommandEngine(live=not getattr(args, "no_live", False),
+                            history=hist)
 
 
 def _confirm_install(dependency: str, command: str) -> bool:
@@ -210,6 +214,28 @@ def _cmd_dev_status(args) -> int:
         print("  -> no supported project (Node.js / Python / PHP) found")
         return 1
     return 0
+
+
+def _cmd_dev_history(args) -> int:
+    store = DevHistory()
+    entries = store.list(limit=args.limit)
+    if not entries:
+        print("no dev commands recorded yet — run `sakti-ai dev run|install|build` first")
+        return 0
+    print(f"dev history ({len(entries)} of last {store._limit})")
+    for entry in entries:
+        status = {"success": "ok  ", "fail": "FAIL", "dry-run": "dry "}.get(
+            entry.get("status"), "?   ")
+        print(f"  #{entry['id']:<4} {entry.get('timestamp','?')}  "
+              f"{status}  {entry.get('action','?'):<8} "
+              f"exit={entry.get('exit_code','?'):<5} {entry.get('command','')}")
+    return 0
+
+
+def _cmd_dev_replay(args) -> int:
+    engine = _dev_engine(args)
+    result = engine.replay(args.entry_id, dry_run=args.dry)
+    return _print_dev_result(result)
 
 
 def _main(argv=None) -> int:
@@ -264,6 +290,19 @@ def _main(argv=None) -> int:
     p_dev_status = dev_sub.add_parser("status", help="show project info")
     p_dev_status.add_argument("--path", default=None, help="project directory")
     p_dev_status.set_defaults(func=_cmd_dev_status)
+
+    p_dev_hist = dev_sub.add_parser("history", help="show command history")
+    p_dev_hist.add_argument("--limit", type=int, default=None,
+                            help="number of entries to show")
+    p_dev_hist.set_defaults(func=_cmd_dev_history)
+
+    p_dev_replay = dev_sub.add_parser("replay", help="re-run a past command")
+    p_dev_replay.add_argument("entry_id", type=int, help="history entry id")
+    p_dev_replay.add_argument("--dry", action="store_true",
+                              help="show the replayed command, do not execute")
+    p_dev_replay.add_argument("--no-live", action="store_true",
+                              help="buffer output instead of streaming it live")
+    p_dev_replay.set_defaults(func=_cmd_dev_replay)
 
     p_mem = sub.add_parser("memory", help="inspect memory")
     p_mem.add_argument("namespace", nargs="?", default="history")

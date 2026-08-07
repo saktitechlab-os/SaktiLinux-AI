@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 #### Added
 
+- **Command history + replay** (`ai/dev/history.py`):
+  - `DevHistory` — persistent JSON store of the last 50 dev commands
+    (default at `~/.local/share/sakti/dev_history.json`, atomic writes,
+    monotonic ids safe to replay after trimming).
+  - Each entry records the **timestamp**, **success/failure status**
+    (`success` / `fail` / `dry-run`), exit code, action (run/install/
+    build/replay), cwd, and the full command line.
+  - Every engine execution is recorded automatically; replays are
+    recorded as their own entries.
+  - CLI: `sakti-ai dev history [--limit N]` lists newest-first with
+    status and timestamps; `sakti-ai dev replay <id> [--dry]` re-runs a
+    stored command in its original directory (dry-replay never executes,
+    unknown ids fail with exit -5).
+- **Tests** — 18 new tests (13 unit: store add/cap/persistence/clear/
+  statuses, engine recording + replay incl. dry and unknown-id; 5
+  integration: CLI history listing, empty-state, replay end-to-end,
+  unknown-id failure, dry-replay no-side-effect). Full suite now
+  **195 AI tests + 14 Phase 1-2 tests**.
+
+### Phase 4A — Developer Core
+
+#### Added
+
 - **Live output streaming** (`ai/actions/runner.py` `run_live`) — dev
   commands stream stdout/stderr line-by-line as they are produced (with an
   optional `on_line` callback), instead of only showing the final output.
