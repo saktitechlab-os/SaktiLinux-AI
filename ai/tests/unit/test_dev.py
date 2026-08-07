@@ -12,7 +12,8 @@ ROOT = os.path.dirname(os.path.dirname(
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from ai.dev import DevCommandEngine, DevContextDetector, DevHistory
+from ai.dev import (DevCommandEngine, DevContextDetector, DevHistory,
+                    format_export)
 from ai.dev.errors import diagnose
 
 
@@ -382,6 +383,84 @@ class TestDevHistory(unittest.TestCase):
         self.store.add("x", "run", "", "success", 0)
         self.store.clear()
         self.assertEqual(len(self.store), 0)
+
+    def _seed(self, limit=50):
+        self.store = DevHistory(path=self.path, limit=limit)
+        self.store.add("npm run dev", "run", "/p", "success", 0)
+        self.store.add("npm install docker", "install", "/p", "fail", 1)
+        self.store.add("pytest", "build", "/p", "success", 0)
+        self.store.add("npm run dev", "run", "/p", "dry-run", 0)
+
+    def test_list_filter_by_status(self):
+        self._seed()
+        self.assertEqual(len(self.store.list(status="fail")), 1)
+        self.assertEqual(self.store.list(status="fail")[0]["command"],
+                         "npm install docker")
+        self.assertEqual(len(self.store.list(status="success")), 2)
+        self.assertEqual(len(self.store.list(status="dry-run")), 1)
+
+    def test_list_filter_by_action(self):
+        self._seed()
+        self.assertEqual(len(self.store.list(action="run")), 2)
+        self.assertEqual(len(self.store.list(action="build")), 1)
+        self.assertEqual(len(self.store.list(action="install")), 1)
+        self.assertEqual(len(self.store.list(action="replay")), 0)
+
+    def test_list_filter_then_limit(self):
+        self._seed()
+        self.assertEqual(len(self.store.list(action="run", limit=1)), 1)
+        self.assertEqual(self.store.list(action="run", limit=1)[0]["command"],
+                         "npm run dev")
+
+    def test_search_finds_command_substring(self):
+        self._seed()
+        hits = self.store.search("docker")
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["action"], "install")
+
+    def test_search_is_case_insensitive(self):
+        self._seed()
+        self.assertEqual(len(self.store.search("NPM RUN")), 2)
+
+    def test_search_matches_cwd(self):
+        self._seed()
+        self.assertEqual(len(self.store.search("/p")), 4)
+        self.assertEqual(len(self.store.search("/other")), 0)
+
+    def test_search_empty_query_returns_nothing(self):
+        self._seed()
+        self.assertEqual(self.store.search(""), [])
+        self.assertEqual(self.store.search("   "), [])
+
+    def test_search_with_status_filter(self):
+        self._seed()
+        hits = self.store.search("npm", status="fail")
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["status"], "fail")
+
+    def test_export_json_roundtrip(self):
+        self._seed()
+        text = format_export(self.store.list(), "json")
+        parsed = json.loads(text)
+        self.assertEqual(len(parsed), 4)
+        self.assertEqual(parsed[0]["action"], "run")
+
+    def test_export_csv_has_header_and_rows(self):
+        self._seed()
+        text = format_export(self.store.list(), "csv")
+        lines = text.strip().splitlines()
+        self.assertTrue(lines[0].startswith("id,timestamp,action,status"))
+        self.assertEqual(len(lines), 5)
+
+    def test_export_markdown_table(self):
+        self._seed()
+        text = format_export(self.store.list(), "md")
+        self.assertIn("| id | timestamp |", text)
+        self.assertIn("npm install docker", text)
+
+    def test_export_unknown_format_raises(self):
+        with self.assertRaises(ValueError):
+            format_export([], "xml")
         self.assertEqual(self.store.list(), [])
 
 

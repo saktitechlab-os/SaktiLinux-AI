@@ -29,7 +29,7 @@ from ai.actions import ActionPipeline
 from ai.command import CommandTranslator
 from ai.context import ContextEngine
 from ai.core import SaktiBrain
-from ai.dev import DevCommandEngine, DevHistory
+from ai.dev import DevCommandEngine, DevHistory, format_export
 from ai.memory import MemoryStore
 from ai.planner import TaskPlanner
 from ai.plugins import PluginLoader
@@ -216,19 +216,62 @@ def _cmd_dev_status(args) -> int:
     return 0
 
 
-def _cmd_dev_history(args) -> int:
-    store = DevHistory()
-    entries = store.list(limit=args.limit)
+def _print_history_table(store, entries, title=None):
     if not entries:
-        print("no dev commands recorded yet — run `sakti-ai dev run|install|build` first")
-        return 0
-    print(f"dev history ({len(entries)} of last {store._limit})")
+        print(f"no dev commands recorded yet — run `sakti-ai dev run|install|build` first")
+        return
+    print(title or f"dev history ({len(entries)} of last {store._limit})")
     for entry in entries:
         status = {"success": "ok  ", "fail": "FAIL", "dry-run": "dry "}.get(
             entry.get("status"), "?   ")
         print(f"  #{entry['id']:<4} {entry.get('timestamp','?')}  "
               f"{status}  {entry.get('action','?'):<8} "
               f"exit={entry.get('exit_code','?'):<5} {entry.get('command','')}")
+
+
+def _cmd_dev_history(args) -> int:
+    store = DevHistory()
+    entries = store.list(limit=args.limit, status=args.status, action=args.action)
+    _print_history_table(store, entries)
+    return 0
+
+
+def _cmd_dev_history_search(args) -> int:
+    store = DevHistory()
+    entries = store.search(args.query, limit=args.limit,
+                           status=args.status, action=args.action)
+    if not entries:
+        print(f"no dev commands found matching {args.query!r}")
+        return 1
+    label = (entries[0].get("timestamp") or "").split("T")[0]
+    header = f"dev history matching {args.query!r} ({len(entries)} of {len(store)})"
+    _print_history_table(store, entries, title=header)
+    return 0
+
+
+def _cmd_dev_history_clear(args) -> int:
+    store = DevHistory()
+    count = len(store)
+    if not args.yes:
+        answer = input(f"erase all {count} dev history entries? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("clear aborted")
+            return 0
+    store.clear()
+    print(f"dev history cleared ({count} entries removed)")
+    return 0
+
+
+def _cmd_dev_history_export(args) -> int:
+    store = DevHistory()
+    entries = store.list(limit=args.limit, status=args.status, action=args.action)
+    text = format_export(entries, args.format)
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        print(f"exported {len(entries)} entries to {args.output}")
+    else:
+        print(text, end="")
     return 0
 
 
@@ -294,7 +337,43 @@ def _main(argv=None) -> int:
     p_dev_hist = dev_sub.add_parser("history", help="show command history")
     p_dev_hist.add_argument("--limit", type=int, default=None,
                             help="number of entries to show")
+    p_dev_hist.add_argument("--status", default=None,
+                            choices=("success", "fail", "dry-run"),
+                            help="filter by status")
+    p_dev_hist.add_argument("--action", default=None,
+                            choices=("run", "install", "build", "replay"),
+                            help="filter by action")
     p_dev_hist.set_defaults(func=_cmd_dev_history)
+    hist_sub = p_dev_hist.add_subparsers(dest="history_action")
+
+    p_hist_search = hist_sub.add_parser("search",
+                                        help="search command history")
+    p_hist_search.add_argument("query", help="text to search for")
+    p_hist_search.add_argument("--limit", type=int, default=None)
+    p_hist_search.add_argument("--status", default=None,
+                               choices=("success", "fail", "dry-run"))
+    p_hist_search.add_argument("--action", default=None,
+                               choices=("run", "install", "build", "replay"))
+    p_hist_search.set_defaults(func=_cmd_dev_history_search)
+
+    p_hist_clear = hist_sub.add_parser("clear", help="erase command history")
+    p_hist_clear.add_argument("--yes", "-y", action="store_true",
+                              help="skip confirmation")
+    p_hist_clear.set_defaults(func=_cmd_dev_history_clear)
+
+    p_hist_export = hist_sub.add_parser("export",
+                                        help="export history as json/csv/markdown")
+    p_hist_export.add_argument("--format", "-f", default="json",
+                               choices=("json", "csv", "md"),
+                               help="output format (default: json)")
+    p_hist_export.add_argument("--output", "-o", default=None,
+                               help="file to write (default: stdout)")
+    p_hist_export.add_argument("--limit", type=int, default=None)
+    p_hist_export.add_argument("--status", default=None,
+                               choices=("success", "fail", "dry-run"))
+    p_hist_export.add_argument("--action", default=None,
+                               choices=("run", "install", "build", "replay"))
+    p_hist_export.set_defaults(func=_cmd_dev_history_export)
 
     p_dev_replay = dev_sub.add_parser("replay", help="re-run a past command")
     p_dev_replay.add_argument("entry_id", type=int, help="history entry id")

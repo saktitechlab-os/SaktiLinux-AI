@@ -22,6 +22,8 @@ Each entry:
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import tempfile
@@ -37,6 +39,8 @@ DEFAULT_LIMIT = 50
 STATUS_SUCCESS = "success"
 STATUS_FAIL = "fail"
 STATUS_DRY = "dry-run"
+
+EXPORT_FORMATS = ("json", "csv", "md")
 
 
 def default_history_path() -> str:
@@ -109,14 +113,54 @@ class DevHistory:
             self._flush()
             return entry_id
 
-    def list(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Newest-first entries (capped to the store limit)."""
+    def list(self, limit: Optional[int] = None,
+             status: Optional[str] = None,
+             action: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Newest-first entries (capped to the store limit).
+
+        Optional filters: ``status`` ("success" | "fail" | "dry-run") and
+        ``action`` ("run" | "install" | "build" | "replay"). Filters are
+        applied before the ``limit`` slice.
+        """
         with self._lock:
             entries = list(self._entries)
         entries.reverse()
+        entries = self._filter(entries, status=status, action=action)
         if limit is not None:
             entries = entries[: max(0, int(limit))]
         return entries
+
+    @staticmethod
+    def _filter(entries: List[Dict[str, Any]],
+                status: Optional[str] = None,
+                action: Optional[str] = None) -> List[Dict[str, Any]]:
+        if status is not None:
+            entries = [e for e in entries if e.get("status") == status]
+        if action is not None:
+            entries = [e for e in entries if e.get("action") == action]
+        return entries
+
+    def search(self, query: str, limit: Optional[int] = None,
+               status: Optional[str] = None,
+               action: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Case-insensitive substring search over command/cwd/action."""
+        q = (query or "").strip().lower()
+        if not q:
+            return []
+        with self._lock:
+            entries = list(self._entries)
+        entries.reverse()
+        hits = []
+        for entry in entries:
+            haystack = " ".join(
+                str(entry.get(k, "")) for k in
+                ("command", "cwd", "action", "status", "timestamp"))
+            if q in haystack.lower():
+                hits.append(entry)
+        hits = self._filter(hits, status=status, action=action)
+        if limit is not None:
+            hits = hits[: max(0, int(limit))]
+        return hits
 
     def get(self, entry_id: int) -> Optional[Dict[str, Any]]:
         with self._lock:
@@ -133,3 +177,32 @@ class DevHistory:
     def __len__(self) -> int:
         with self._lock:
             return len(self._entries)
+
+
+def format_export(entries: List[Dict[str, Any]], fmt: str = "json") -> str:
+    """Serialize entries as json, csv (with header), or markdown table."""
+    fmt = (fmt or "json").lower()
+    if fmt not in EXPORT_FORMATS:
+        raise ValueError(f"unsupported export format {fmt!r} "
+                         f"(choose from {', '.join(EXPORT_FORMATS)})")
+    if fmt == "json":
+        return json.dumps(entries, indent=2, ensure_ascii=False)
+    if fmt == "csv":
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["id", "timestamp", "action", "status",
+                         "exit_code", "cwd", "command"])
+        for e in entries:
+            writer.writerow([e.get("id"), e.get("timestamp"),
+                             e.get("action"), e.get("status"),
+                             e.get("exit_code"), e.get("cwd"),
+                             e.get("command")])
+        return buf.getvalue()
+    lines = ["| id | timestamp | action | status | exit | command |",
+             "|----|-----------|--------|--------|------|---------|"]
+    for e in entries:
+        command = (e.get("command") or "").replace("|", "\\|")
+        lines.append(f"| {e.get('id')} | {e.get('timestamp')} | "
+                     f"{e.get('action')} | {e.get('status')} | "
+                     f"{e.get('exit_code')} | {command} |")
+    return "\n".join(lines) + "\n"

@@ -351,5 +351,115 @@ class TestDevHistoryCli(unittest.TestCase):
         self.assertIn("[dry-run]", proc.stdout)
 
 
+class TestDevHistoryFilteringCli(unittest.TestCase):
+    """Filtering, search, export, and clear of the dev history."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="sakti_cli_filt_")
+        self.data = tempfile.mkdtemp(prefix="sakti_filt_data_")
+        with open(os.path.join(self.dir, "main.py"), "w") as fh:
+            fh.write("print('x')\n")
+        with open(os.path.join(self.dir, "pyproject.toml"), "w") as fh:
+            fh.write('[project]\nname = "f"\n')
+        open(os.path.join(self.dir, "requirements.txt"), "w").close()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+        shutil.rmtree(self.data, ignore_errors=True)
+
+    def _env(self):
+        env = dict(os.environ)
+        env["PYTHONPATH"] = ROOT + os.pathsep + env.get("PYTHONPATH", "")
+        env["XDG_DATA_HOME"] = self.data
+        return env
+
+    def _cli(self, *args):
+        return subprocess.run(
+            [sys.executable, "-m", "ai.cli", "dev", *args],
+            capture_output=True, text=True, cwd=self.dir, env=self._env())
+
+    def _seed(self):
+        # a successful run
+        self._cli("run")
+        # a failing command -> broken source then build
+        with open(os.path.join(self.dir, "main.py"), "w") as fh:
+            fh.write("this is not valid python =\n")
+        self._cli("build")
+        with open(os.path.join(self.dir, "main.py"), "w") as fh:
+            fh.write("print('x')\n")
+        return len(self._cli("history").stdout.splitlines())
+
+    def test_filter_by_status_fail(self):
+        self._seed()
+        proc = self._cli("history", "--status", "fail")
+        self.assertEqual(proc.returncode, 0)
+        # only FAIL rows
+        found_fail = any(line.startswith("  #") and "FAIL" in line
+                         for line in proc.stdout.splitlines())
+        found_ok = any(line.startswith("  #") and "ok  " in line
+                       for line in proc.stdout.splitlines())
+        self.assertTrue(found_fail)
+        self.assertFalse(found_ok)
+
+    def test_filter_by_action_run(self):
+        self._seed()
+        proc = self._cli("history", "--action", "run")
+        self.assertEqual(proc.returncode, 0)
+        for line in proc.stdout.splitlines():
+            if line.startswith("  #"):
+                self.assertIn("run", line)
+
+    def test_search_finds_entry(self):
+        self._seed()
+        proc = self._cli("history", "search", "main.py")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("main.py", proc.stdout)
+
+    def test_search_no_match_exits_nonzero(self):
+        self._seed()
+        proc = self._cli("history", "search", "docker-bootstrap")
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("no dev commands found", proc.stdout)
+
+    def test_export_json_to_stdout(self):
+        self._seed()
+        proc = self._cli("history", "export")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        import json as _json
+        entries = _json.loads(proc.stdout)
+        self.assertGreaterEqual(len(entries), 1)
+        self.assertTrue(all("command" in e for e in entries))
+
+    def test_export_csv_to_file(self):
+        self._seed()
+        out = os.path.join(self.dir, "hist.csv")
+        proc = self._cli("history", "export", "--format", "csv",
+                         "--output", out)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue(os.path.exists(out))
+        text = open(out, encoding="utf-8").read()
+        self.assertTrue(text.startswith("id,timestamp,action,status"))
+
+    def test_clear_with_yes(self):
+        self._seed()
+        proc = self._cli("history", "clear", "--yes")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("cleared", proc.stdout)
+        empty = self._cli("history")
+        self.assertIn("no dev commands recorded", empty.stdout)
+
+    def test_clear_aborted_without_confirmation(self):
+        self._seed()
+        proc = subprocess.run(
+            [sys.executable, "-m", "ai.cli", "dev", "history", "clear"],
+            capture_output=True, text=True, cwd=self.dir, env=self._env(),
+            input="n\n")
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("clear aborted", proc.stdout)
+        # history still intact
+        hist = self._cli("history")
+        self.assertNotIn("no dev commands recorded", hist.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

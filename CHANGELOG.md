@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 #### Added
 
+- **History filtering, search, export, clear** (extends the command
+  history):
+  - `sakti-ai dev history --status success|fail|dry-run` and
+    `--action run|install|build|replay` filter the listing.
+  - `sakti-ai dev history search <text>` — case-insensitive substring
+    search over command/cwd/action/status/timestamp (exit 1 when no match).
+  - `sakti-ai dev history export [--format json|csv|md] [--output FILE]
+    [--status S] [--action A]` — serialize to stdout or a file.
+  - `sakti-ai dev history clear [--yes]` — confirm-and-erase the log
+    (ids stay monotonic, so replay ids remain stable).
+  - Store (`DevHistory`) gained `list(status=, action=)`, `search()`, and
+    `format_export()` helpers.
+- **Tests** — 22 new (12 unit: filter/limit/search/export roundtrips; 10
+  integration: CLI filter/export/clear/search incl. stdin-abort). Full
+  suite now **215 AI tests + 14 Phase 1-2**.
+
+### Phase 4A — Developer Core
+
+#### Added
+
 - **Command history + replay** (`ai/dev/history.py`):
   - `DevHistory` — persistent JSON store of the last 50 dev commands
     (default at `~/.local/share/sakti/dev_history.json`, atomic writes,
