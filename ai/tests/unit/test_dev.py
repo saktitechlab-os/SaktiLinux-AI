@@ -13,6 +13,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from ai.dev import DevCommandEngine, DevContextDetector
+from ai.dev.errors import diagnose
 
 
 class Fixture:
@@ -125,12 +126,22 @@ class _RecordingRunner:
 
     def __init__(self):
         self.commands = []
+        self.dry_runs = []
+        self.live_runs = 0
 
     def run(self, command, dry_run=False, cwd=None):
         self.commands.append(command)
+        self.dry_runs.append(dry_run)
         return type("R", (), {
             "success": True, "exit_code": 0, "stdout": "ok",
             "stderr": "", "dry_run": dry_run})()
+
+    def run_live(self, command, cwd=None, timeout=None, on_line=None):
+        self.live_runs += 1
+        self.commands.append(command)
+        return type("R", (), {
+            "success": True, "exit_code": 0, "stdout": "ok",
+            "stderr": "", "dry_run": False})()
 
 
 class TestDevCommandEngineConstruction(unittest.TestCase):
@@ -217,6 +228,101 @@ class TestDevCommandEngineConstruction(unittest.TestCase):
         d = self.fx.node()
         ctx = self.engine.status(d)
         self.assertEqual(ctx.project_type, "node")
+
+
+class TestDevCommandSafety(unittest.TestCase):
+    """Dry-run, confirmation and live streaming plumbing."""
+
+    def setUp(self):
+        self.fx = Fixture()
+        self.runner = _RecordingRunner()
+        self.engine = DevCommandEngine(runner=self.runner)
+
+    def tearDown(self):
+        self.fx.destroy()
+
+    def test_dry_run_never_executes(self):
+        d = self.fx.node(scripts={"dev": "vite"})
+        result = self.engine.run_project(d, dry_run=True)
+        self.assertTrue(result.dry_run)
+        self.assertTrue(result.success)
+        self.assertTrue(all(self.runner.dry_runs))
+        # Runner received dry_run=True so it never spawned a subprocess.
+
+    def test_install_confirmation_declined(self):
+        d = self.fx.node()
+        result = self.engine.install_dependency("lodash", path=d,
+                                                confirm=lambda dep, cmd: False)
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, -4)
+        self.assertIn("aborted", result.stderr)
+        self.assertEqual(self.runner.commands, [])
+
+    def test_install_confirmation_accepted(self):
+        d = self.fx.node()
+        result = self.engine.install_dependency("lodash", path=d,
+                                                confirm=lambda dep, cmd: True)
+        self.assertTrue(result.success)
+        self.assertEqual(self.runner.commands, ["npm install lodash"])
+
+    def test_install_dry_run_skips_confirmation(self):
+        d = self.fx.node()
+        asked = []
+        result = self.engine.install_dependency(
+            "lodash", path=d, dry_run=True,
+            confirm=lambda dep, cmd: asked.append(dep) or False)
+        self.assertEqual(asked, [])
+        self.assertEqual(self.runner.commands, ["npm install lodash"])
+        self.assertTrue(self.runner.dry_runs)
+
+    def test_live_streaming_uses_run_live(self):
+        d = self.fx.node(scripts={"dev": "vite"})
+        self.engine.run_project(d, live=True)
+        self.assertEqual(self.runner.live_runs, 1)
+
+    def test_default_not_live(self):
+        d = self.fx.node(scripts={"dev": "vite"})
+        self.engine.run_project(d)
+        self.assertEqual(self.runner.live_runs, 0)
+
+
+class TestErrorDiagnosis(unittest.TestCase):
+    """Human-readable failure hints for pip/npm."""
+
+    def test_pip_no_matching_distribution(self):
+        hint = diagnose("pip install foo", 1, "",
+                        "ERROR: No matching distribution found for foo")
+        self.assertIsNotNone(hint)
+        self.assertIn("PyPI", hint)
+
+    def test_pip_externally_managed(self):
+        hint = diagnose(
+            "pip install foo", 1, "",
+            "error: externally-managed-environment\n(PEP 668)")
+        self.assertIsNotNone(hint)
+        self.assertIn("virtualenv", hint)
+
+    def test_npm_e404(self):
+        hint = diagnose("npm install foo", 1, "",
+                        "npm ERR! code E404\nnpm ERR! 404 Not Found")
+        self.assertIsNotNone(hint)
+        self.assertIn("registry", hint)
+
+    def test_npm_eacces(self):
+        hint = diagnose("npm install -g x", 1,
+                        "", "npm ERR! code EACCES permission denied")
+        self.assertIsNotNone(hint)
+        self.assertIn("permission", hint)
+
+    def test_command_not_found(self):
+        hint = diagnose("frobnicate -x", 1, "",
+                        "'frobnicate' is not recognized as an internal "
+                        "or external command")
+        self.assertIsNotNone(hint)
+        self.assertIn("PATH", hint)
+
+    def test_success_returns_none(self):
+        self.assertIsNone(diagnose("echo hi", 0, "hi", ""))
 
 
 if __name__ == "__main__":

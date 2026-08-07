@@ -10,6 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 #### Added
 
+- **Live output streaming** (`ai/actions/runner.py` `run_live`) — dev
+  commands stream stdout/stderr line-by-line as they are produced (with an
+  optional `on_line` callback), instead of only showing the final output.
+  Dev CLI runs live by default; `--no-live` opts back into buffering.
+- **Dry-run mode** for dev commands — `sakti-ai dev run|build [--dry]`,
+  `sakti-ai dev install <dep> --dry` print the exact command that *would*
+  run (`[dry-run] ...`) and never execute it (verified with a sentinel-file
+  test). Dry-run also skips the install confirmation prompt.
+- **Install confirmation** — `sakti-ai dev install <dep>` now asks
+  `Install <dep>? [y/N]` before modifying the environment; `--yes`/`-y`
+  skips the prompt, answering no aborts with exit code -4 without running
+  anything.
+- **Human-readable error hints** (`ai/dev/errors.py`) — when npm/pip/
+  composer fails, `diagnose()` maps common failures (E404, EACCES,
+  ERESOLVE, "No matching distribution", PEP 668 externally-managed, SSL/
+  network, command-not-found, disk full, timeouts) onto an actionable
+  `[fix] ...` line appended to stderr.
+- **Tests** — 19 new tests (12 unit: confirmation accept/decline, dry-run
+  plumbing, live dispatch, `diagnose` hints; 7 integration: real
+  line-by-line streaming incl. incremental ordering + stderr + timeout,
+  dry-run filesystem sentinel, failed-install hint, CLI `--dry --yes`).
+  Full suite now **177 AI tests + 14 Phase 1-2 tests**.
+
+### Phase 4A — Developer Core
+
+#### Added
+
 - **`ai/dev/` Developer Core** — real developer workflows, no placeholders:
   - `DevContextDetector` (`ai/dev/detector.py`) — filesystem project sniffing
     for Node.js, Python, and PHP: project type, language (javascript /

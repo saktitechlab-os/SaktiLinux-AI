@@ -9,7 +9,13 @@ project (detected by DevContextDetector) it:
 
 Only three ecosystems are supported (Node.js, Python, PHP) — anything
 else yields a clear "unsupported" result. Execution is delegated to the
-existing CommandRunner (real subprocesses; never a dry-run).
+existing CommandRunner (real subprocesses).
+
+Safety & UX:
+- `dry_run=True` plans the command but never executes it.
+- `confirm` callback is asked before risky installs run.
+- `live=True` streams output line-by-line instead of buffering it.
+- Failed commands get a human-readable hint via `ai.dev.errors.diagnose`.
 
     engine = DevCommandEngine()
     result = engine.run_project(path="~/code/myapp")     # npm run dev...
@@ -21,11 +27,12 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from ..actions.runner import CommandRunner
 from ..core.types import ActionResult
 from .detector import DevContext, DevContextDetector
+from .errors import diagnose
 
 
 def _python_cmd(*parts: str) -> str:
@@ -41,9 +48,13 @@ class DevCommandEngine:
     """Detects projects and executes developer commands for real."""
 
     def __init__(self, detector: Optional[DevContextDetector] = None,
-                 runner: Optional[CommandRunner] = None) -> None:
+                 runner: Optional[CommandRunner] = None,
+                 confirm: Optional[Callable[[str, str], bool]] = None,
+                 live: bool = False) -> None:
         self.detector = detector or DevContextDetector()
         self.runner = runner or CommandRunner()
+        self.confirm = confirm
+        self.live = live
 
     # ------------------------------------------------------------ api
     def status(self, path: Optional[str] = None) -> DevContext:
@@ -51,16 +62,23 @@ class DevCommandEngine:
 
     def run_project(self, path: Optional[str] = None,
                     script: Optional[str] = None,
-                    args: Optional[str] = None) -> ActionResult:
+                    args: Optional[str] = None,
+                    dry_run: bool = False,
+                    live: Optional[bool] = None) -> ActionResult:
         ctx = self.detector.detect(path)
         if not ctx.detected:
             return _unsupported(ctx, "run")
         command, label = self._run_command(ctx, script, args)
-        return self._execute(ctx, "run", label, [command])
+        return self._execute(ctx, "run", label, [command],
+                             dry_run=dry_run, live=live)
 
     def install_dependency(self, dependency: str,
                            path: Optional[str] = None,
-                           manager: Optional[str] = None) -> ActionResult:
+                           manager: Optional[str] = None,
+                           dry_run: bool = False,
+                           live: Optional[bool] = None,
+                           confirm: Optional[Callable[[str, str], bool]] = None
+                           ) -> ActionResult:
         if not dependency or not dependency.strip():
             return ActionResult.fail("no dependency name given", exit_code=-1)
         ctx = self.detector.detect(path)
@@ -74,15 +92,23 @@ class DevCommandEngine:
         if not base:
             return ActionResult.fail(
                 f"no installer known for package manager '{pm}'", exit_code=-1)
+        command = f"{base} {dependency}"
+        asker = confirm if confirm is not None else self.confirm
+        if asker and not dry_run and not asker(dependency, command):
+            return ActionResult.fail(
+                f"aborted by user: not installing {dependency}", exit_code=-4)
         return self._execute(ctx, "install", f"install {dependency}",
-                             [f"{base} {dependency}"])
+                             [command], dry_run=dry_run, live=live)
 
-    def build_project(self, path: Optional[str] = None) -> ActionResult:
+    def build_project(self, path: Optional[str] = None,
+                      dry_run: bool = False,
+                      live: Optional[bool] = None) -> ActionResult:
         ctx = self.detector.detect(path)
         if not ctx.detected:
             return _unsupported(ctx, "build")
         command, label = self._build_command(ctx)
-        return self._execute(ctx, "build", label, [command])
+        return self._execute(ctx, "build", label, [command],
+                             dry_run=dry_run, live=live)
 
     # ------------------------------------------------------- commands
     def _run_command(self, ctx: DevContext, script: Optional[str],
@@ -128,13 +154,24 @@ class DevCommandEngine:
 
     # --------------------------------------------------------- execute
     def _execute(self, ctx: DevContext, action: str, label: str,
-                 commands: List[str]) -> ActionResult:
+                 commands: List[str], dry_run: bool = False,
+                 live: Optional[bool] = None) -> ActionResult:
         cwd = ctx.root
         if not commands or not commands[0]:
             return ActionResult.fail(
                 f"no command available to {action} this project", exit_code=-1)
         command = commands[0]
-        result = self.runner.run(command, cwd=cwd)
+        if dry_run:
+            result = self.runner.run(command, cwd=cwd, dry_run=True)
+        elif live if live is not None else self.live:
+            result = self.runner.run_live(command, cwd=cwd)
+        else:
+            result = self.runner.run(command, cwd=cwd)
+        if not result.success and result.stderr:
+            hint = diagnose(command, result.exit_code, result.stdout,
+                            result.stderr)
+            if hint:
+                result.stderr = f"{result.stderr}\n[fix] {hint}".strip()
         result.stdout = f"[{action}] {label}\n{result.stdout}".strip() \
             if result.stdout else f"[{action}] {label}: (no output)"
         return result

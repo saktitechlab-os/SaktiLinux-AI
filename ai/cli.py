@@ -5,9 +5,9 @@ Usage:
     python3 -m ai.cli chat "install docker" [--dry-run]
     python3 -m ai.cli status
     python3 -m ai.cli dev status [--path DIR]
-    python3 -m ai.cli dev run [--path DIR] [--script NAME] [--arguments ...]
-    python3 -m ai.cli dev install <dependency> [--path DIR] [--manager M]
-    python3 -m ai.cli dev build [--path DIR]
+    python3 -m ai.cli dev run [--path DIR] [--script NAME] [--dry] [--no-live]
+    python3 -m ai.cli dev install <dependency> [--yes] [--dry] [--manager M]
+    python3 -m ai.cli dev build [--path DIR] [--dry]
     python3 -m ai.cli memory list [namespace]
     python3 -m ai.cli providers list
     python3 -m ai.cli plugins list
@@ -154,34 +154,46 @@ def _print_dev_result(result) -> int:
     if result.stderr:
         print(f"[sakti] stderr: {result.stderr}", file=sys.stderr)
     if not result.success:
-        print(f"[sakti] dev command failed "
-              f"(exit {result.exit_code}): {result.stderr or result.stdout}",
-              file=sys.stderr)
+        if result.exit_code == -4:
+            print("install cancelled by user", file=sys.stderr)
+        else:
+            print(f"[sakti] dev command failed "
+                  f"(exit {result.exit_code}): {result.stderr or result.stdout}",
+                  file=sys.stderr)
         return 1
     return 0
 
 
 def _dev_engine(args) -> DevCommandEngine:
-    return DevCommandEngine()
+    return DevCommandEngine(live=not getattr(args, "no_live", False))
+
+
+def _confirm_install(dependency: str, command: str) -> bool:
+    print(f"[sakti] will run: {command}")
+    answer = input(f"Install {dependency}? [y/N] ").strip().lower()
+    return answer in ("y", "yes")
 
 
 def _cmd_dev_run(args) -> int:
     engine = _dev_engine(args)
     result = engine.run_project(args.path, script=args.script,
-                                args=args.arguments)
+                                args=args.arguments, dry_run=args.dry)
     return _print_dev_result(result)
 
 
 def _cmd_dev_install(args) -> int:
     engine = _dev_engine(args)
+    asker = _confirm_install if not args.yes and not args.dry else None
     result = engine.install_dependency(args.dependency, path=args.path,
-                                       manager=args.manager)
+                                       manager=args.manager,
+                                       dry_run=args.dry,
+                                       confirm=asker)
     return _print_dev_result(result)
 
 
 def _cmd_dev_build(args) -> int:
     engine = _dev_engine(args)
-    result = engine.build_project(args.path)
+    result = engine.build_project(args.path, dry_run=args.dry)
     return _print_dev_result(result)
 
 
@@ -222,6 +234,10 @@ def _main(argv=None) -> int:
     p_dev_run.add_argument("--path", default=None, help="project directory")
     p_dev_run.add_argument("--script", default=None, help="npm script name")
     p_dev_run.add_argument("--arguments", default=None, help="extra args")
+    p_dev_run.add_argument("--dry", action="store_true",
+                           help="show planned commands, do not execute")
+    p_dev_run.add_argument("--no-live", action="store_true",
+                           help="buffer output instead of streaming it live")
     p_dev_run.set_defaults(func=_cmd_dev_run)
 
     p_dev_install = dev_sub.add_parser("install", help="install a dependency")
@@ -229,10 +245,20 @@ def _main(argv=None) -> int:
     p_dev_install.add_argument("--path", default=None, help="project directory")
     p_dev_install.add_argument("--manager", default=None,
                                help="force package manager (npm, pip, ...)")
+    p_dev_install.add_argument("--yes", "-y", action="store_true",
+                               help="skip the confirmation prompt")
+    p_dev_install.add_argument("--dry", action="store_true",
+                               help="show what would be installed, do not execute")
+    p_dev_install.add_argument("--no-live", action="store_true",
+                               help="buffer output instead of streaming it live")
     p_dev_install.set_defaults(func=_cmd_dev_install)
 
     p_dev_build = dev_sub.add_parser("build", help="build the project")
     p_dev_build.add_argument("--path", default=None, help="project directory")
+    p_dev_build.add_argument("--dry", action="store_true",
+                             help="show what would run, do not execute")
+    p_dev_build.add_argument("--no-live", action="store_true",
+                             help="buffer output instead of streaming it live")
     p_dev_build.set_defaults(func=_cmd_dev_build)
 
     p_dev_status = dev_sub.add_parser("status", help="show project info")

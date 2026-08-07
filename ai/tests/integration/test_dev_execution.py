@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(
@@ -22,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from ai.actions.runner import CommandRunner
 from ai.dev import DevCommandEngine
 
 
@@ -146,6 +148,140 @@ class TestRealCliDev(unittest.TestCase):
             self.assertIn("no supported project", proc.stdout)
         finally:
             shutil.rmtree(empty, ignore_errors=True)
+
+
+class TestLiveStreaming(unittest.TestCase):
+    """run_live streams lines as they are produced (real subprocess)."""
+
+    def setUp(self):
+        self.runner = CommandRunner(timeout_seconds=5)
+
+    def test_run_live_captures_stdout(self):
+        result = self.runner.run_live("echo live-stream-ok")
+        self.assertTrue(result.success)
+        self.assertIn("live-stream-ok", result.stdout)
+        self.assertFalse(result.dry_run)
+
+    def test_run_live_streams_incremental_lines(self):
+        seen: list[str] = []
+        script = ("import sys,time\n"
+                  "for i in range(3):\n"
+                  "    print('line', i, flush=True)\n"
+                  "    time.sleep(0.1)\n")
+        script_path = os.path.join(tempfile.gettempdir(),
+                                   "sakti_live_probe.py")
+        with open(script_path, "w", encoding="utf-8") as fh:
+            fh.write(script)
+        try:
+            result = self.runner.run_live(
+                f"{sys.executable} \"{script_path}\"",
+                on_line=lambda l, s: seen.append(l))
+            self.assertTrue(result.success, result.stderr)
+            content = [l for l in seen if l]  # drop EOF markers
+            self.assertEqual(len(content), 3)
+            self.assertEqual(content[0], "line 0")
+            self.assertEqual(content[2], "line 2")
+        finally:
+            os.unlink(script_path)
+
+    def test_run_live_timeout_is_reported(self):
+        script_path = os.path.join(tempfile.gettempdir(),
+                                   "sakti_sleep_probe.py")
+        with open(script_path, "w", encoding="utf-8") as fh:
+            fh.write("import time\ntime.sleep(30)\n")
+        try:
+            result = self.runner.run_live(
+                f"{sys.executable} \"{script_path}\"", timeout=1)
+            self.assertFalse(result.success)
+            self.assertEqual(result.exit_code, -2)
+        finally:
+            os.unlink(script_path)
+
+    def test_run_live_stderr_captured(self):
+        script_path = os.path.join(tempfile.gettempdir(),
+                                   "sakti_err_probe.py")
+        with open(script_path, "w", encoding="utf-8") as fh:
+            fh.write("import sys\nsys.stderr.write('boom-err')\n")
+        try:
+            result = self.runner.run_live(
+                f"{sys.executable} \"{script_path}\"")
+            self.assertTrue(result.success)
+            self.assertIn("boom-err", result.stderr)
+        finally:
+            os.unlink(script_path)
+
+
+class TestSafetyAndHints(unittest.TestCase):
+    """Dry-run provably does nothing; failures get readable hints."""
+
+    def test_dry_run_leaves_no_side_effect(self):
+        marker = os.path.join(tempfile.gettempdir(),
+                              "sakti-dry-marker-xyz")
+        if os.path.exists(marker):
+            os.unlink(marker)
+        d = tempfile.mkdtemp(prefix="sakti_dry_")
+        try:
+            with open(os.path.join(d, "main.py"), "w") as fh:
+                fh.write("print('x')\n")
+            with open(os.path.join(d, "pyproject.toml"), "w") as fh:
+                fh.write('[project]\nname = "x"\n')
+            open(os.path.join(d, "requirements.txt"), "w").close()
+            with open(os.path.join(d, "main2.py"), "w") as fh:
+                fh.write(f"print(open(r'{marker}','w'))\n")
+            # dry-run build must not create anything
+            engine = DevCommandEngine()
+            with open(os.path.join(d, "touch.py"), "w") as fh:
+                fh.write(f"open(r'{marker}','w').write('x')")
+            result = engine.run_project(d, dry_run=True)
+            self.assertTrue(result.success)
+            self.assertTrue(result.dry_run)
+            self.assertFalse(os.path.exists(marker),
+                             "dry-run must never touch the filesystem")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            if os.path.exists(marker):
+                os.unlink(marker)
+
+    def test_failed_pip_install_gets_hint(self):
+        if _which("pip") is False and "python" not in str(sys.executable):
+            self.skipTest("no pip on this host")
+        d = tempfile.mkdtemp(prefix="sakti_hint_")
+        try:
+            with open(os.path.join(d, "main.py"), "w") as fh:
+                fh.write("print(1)\n")
+            with open(os.path.join(d, "pyproject.toml"), "w") as fh:
+                fh.write('[project]\nname = "x"\n')
+            open(os.path.join(d, "requirements.txt"), "w").close()
+            engine = DevCommandEngine()
+            result = engine.install_dependency("sakti-nonexistent-xyz",
+                                               path=d)
+            self.assertFalse(result.success)
+            self.assertTrue(any(word in result.stderr.lower()
+                                for word in ("pypi", "pypl", "no matching",
+                                             "not on pypi", "does not exist")),
+                            f"expected a friendly hint, got: {result.stderr}")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_cli_install_dry_run_no_prompt(self):
+        d = tempfile.mkdtemp(prefix="sakti_cli_dry_")
+        try:
+            with open(os.path.join(d, "main.py"), "w") as fh:
+                fh.write("print(1)\n")
+            with open(os.path.join(d, "pyproject.toml"), "w") as fh:
+                fh.write('[project]\nname = "x"\n')
+            open(os.path.join(d, "requirements.txt"), "w").close()
+            env = dict(os.environ)
+            env["PYTHONPATH"] = ROOT + os.pathsep + env.get("PYTHONPATH", "")
+            proc = subprocess.run(
+                [sys.executable, "-m", "ai.cli", "dev", "install",
+                 "six", "--dry", "--yes"],
+                capture_output=True, text=True, cwd=d, env=env)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("[dry-run]", proc.stdout)
+            self.assertNotIn("[sakti] will run:", proc.stdout)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 if __name__ == "__main__":
