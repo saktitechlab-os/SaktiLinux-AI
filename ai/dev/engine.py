@@ -25,12 +25,17 @@ Safety & UX:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from ..actions.runner import CommandRunner
 from ..core.types import ActionResult
+from ..tools.adapters import DockerAdapter, GitAdapter, OpenCodeAdapter
+from ..tools.adapters.git import CommitError, NotARepository
+from ..tools.adapters.docker import DockerfileMissing
+from ..tools.adapters.opencode import OpenCodePathMissing
 from .detector import DevContext, DevContextDetector
 from .errors import diagnose
 from .history import DevHistory, STATUS_DRY, STATUS_FAIL, STATUS_SUCCESS
@@ -52,12 +57,18 @@ class DevCommandEngine:
                  runner: Optional[CommandRunner] = None,
                  confirm: Optional[Callable[[str, str], bool]] = None,
                  live: bool = False,
-                 history: Optional[DevHistory] = None) -> None:
+                 history: Optional[DevHistory] = None,
+                 git: Optional[GitAdapter] = None,
+                 docker: Optional[DockerAdapter] = None,
+                 opencode: Optional[OpenCodeAdapter] = None) -> None:
         self.detector = detector or DevContextDetector()
         self.runner = runner or CommandRunner()
         self.confirm = confirm
         self.live = live
         self.history = history
+        self.git = git or GitAdapter()
+        self.docker = docker or DockerAdapter()
+        self.opencode = opencode or OpenCodeAdapter()
 
     # ------------------------------------------------------------ api
     def status(self, path: Optional[str] = None) -> DevContext:
@@ -138,6 +149,118 @@ class DevCommandEngine:
         command, label = self._build_command(ctx)
         return self._execute(ctx, "build", label, [command],
                              dry_run=dry_run, live=live)
+
+    # -------------------------------------------------- git tool
+    def git_status(self, path: Optional[str] = None,
+                   dry_run: bool = False,
+                   live: Optional[bool] = None) -> ActionResult:
+        try:
+            command, root = self.git.plan_status(path)
+        except NotARepository as exc:
+            return ActionResult.fail(str(exc), exit_code=-1)
+        ctx = DevContext(root=root, project_type="unknown")
+        return self._execute(ctx, "git", "git status --short",
+                             [command], dry_run=dry_run, live=live)
+
+    def git_push(self, path: Optional[str] = None,
+                 remote: Optional[str] = None,
+                 branch: Optional[str] = None,
+                 dry_run: bool = False,
+                 live: Optional[bool] = None) -> ActionResult:
+        try:
+            command, root = self.git.plan_push(path, remote, branch)
+        except NotARepository as exc:
+            return ActionResult.fail(str(exc), exit_code=-1)
+        ctx = DevContext(root=root, project_type="unknown")
+        return self._execute(ctx, "git", "git push",
+                             [command], dry_run=dry_run, live=live)
+
+    def git_commit(self, message: str, path: Optional[str] = None,
+                   add_all: bool = True, dry_run: bool = False,
+                   live: Optional[bool] = None,
+                   confirm: Optional[Callable[[str, str], bool]] = None
+                   ) -> ActionResult:
+        """Safe commit flow: must be a repo, message required, and the
+        staged state is confirmed before commit (skippable with `confirm`).
+        """
+        try:
+            command, root = self.git.plan_add_commit(
+                message, path, add_all=add_all)
+        except (NotARepository, CommitError) as exc:
+            return ActionResult.fail(str(exc), exit_code=-1)
+        asker = confirm if confirm is not None else self.confirm
+        if asker and not dry_run and not asker("commit", command):
+            return ActionResult.fail(
+                "aborted by user: not committing", exit_code=-4)
+        ctx = DevContext(root=root, project_type="unknown")
+        return self._execute(ctx, "git", f"git commit {message.strip()!r}",
+                             [command], dry_run=dry_run, live=live)
+
+    # ------------------------------------------------------ docker tool
+    def docker_build(self, path: Optional[str] = None,
+                     tag: Optional[str] = None,
+                     dry_run: bool = False,
+                     live: Optional[bool] = None) -> ActionResult:
+        try:
+            command, root = self.docker.plan_build(path, tag=tag)
+        except DockerfileMissing as exc:
+            return ActionResult.fail(str(exc), exit_code=-1)
+        ctx = DevContext(root=root, project_type="unknown")
+        return self._execute(ctx, "docker", "docker build",
+                             [command], dry_run=dry_run, live=live)
+
+    def docker_run(self, path: Optional[str] = None,
+                   image: Optional[str] = None,
+                   tag: Optional[str] = None,
+                   ports: Optional[str] = None,
+                   detach: bool = False,
+                   dry_run: bool = False,
+                   live: Optional[bool] = None) -> ActionResult:
+        try:
+            command, root = self.docker.plan_run(
+                path, image=image, tag=tag, ports=ports, detach=detach)
+        except DockerfileMissing as exc:
+            return ActionResult.fail(str(exc), exit_code=-1)
+        ctx = DevContext(root=root, project_type="unknown")
+        return self._execute(ctx, "docker", "docker run",
+                             [command], dry_run=dry_run, live=live)
+
+    # ---------------------------------------------------- opencode tool
+    def opencode_run(self, prompt: str, path: Optional[str] = None,
+                     dry_run: bool = False,
+                     live: Optional[bool] = None) -> ActionResult:
+        if not prompt or not prompt.strip():
+            return ActionResult.fail(
+                "opencode needs a prompt (non-empty)", exit_code=-1)
+        try:
+            command, root = self.opencode.plan_run(prompt, path)
+        except OpenCodePathMissing as exc:
+            return ActionResult.fail(str(exc), exit_code=-1)
+        ctx = DevContext(root=root, project_type="unknown")
+        return self._execute(ctx, "opencode", "opencode run",
+                             [command], dry_run=dry_run, live=live)
+
+    def opencode_generate(self, prompt: str, path: Optional[str] = None,
+                          output_file: Optional[str] = None,
+                          dry_run: bool = False,
+                          live: Optional[bool] = None) -> ActionResult:
+        """Run opencode and auto-save its generated code into the project.
+        """
+        if not prompt or not prompt.strip():
+            return ActionResult.fail(
+                "opencode needs a prompt (non-empty)", exit_code=-1)
+        try:
+            command, root = self.opencode.plan_generate(
+                prompt, path, output_file=output_file)
+        except OpenCodePathMissing as exc:
+            return ActionResult.fail(str(exc), exit_code=-1)
+        ctx = DevContext(root=root, project_type="unknown")
+        result = self._execute(ctx, "opencode", "opencode generate",
+                               [command], dry_run=dry_run, live=live)
+        if result.success and not dry_run and output_file:
+            saved = os.path.join(root, output_file)
+            result.stdout = (f"generated {saved}\n{result.stdout}").strip()
+        return result
 
     # ------------------------------------------------------- commands
     def _run_command(self, ctx: DevContext, script: Optional[str],

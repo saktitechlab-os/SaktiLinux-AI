@@ -8,8 +8,12 @@ Usage:
     python3 -m ai.cli dev run [--path DIR] [--script NAME] [--dry] [--no-live]
     python3 -m ai.cli dev install <dependency> [--yes] [--dry] [--manager M]
     python3 -m ai.cli dev build [--path DIR] [--dry]
-    python3 -m ai.cli dev history [--limit N]
+    python3 -m ai.cli dev history [--limit N] [--status S] [--action A]
     python3 -m ai.cli dev replay <id> [--dry]
+    python3 -m ai.cli dev git status|commit -m MSG|push [--path DIR]
+    python3 -m ai.cli dev docker build|run [--path DIR] [--tag T]
+    python3 -m ai.cli dev opencode run|generate PROMPT [--file NAME]
+    python3 -m ai.cli tools list|install <tool>
     python3 -m ai.cli memory list [namespace]
     python3 -m ai.cli providers list
     python3 -m ai.cli plugins list
@@ -34,6 +38,7 @@ from ai.memory import MemoryStore
 from ai.planner import TaskPlanner
 from ai.plugins import PluginLoader
 from ai.providers import ProviderManager
+from ai.tools import ToolManager, ToolRegistry
 from ai.voice import VoiceEngine, WakeWord
 
 
@@ -178,6 +183,18 @@ def _confirm_install(dependency: str, command: str) -> bool:
     return answer in ("y", "yes")
 
 
+def _confirm_commit(label: str, command: str) -> bool:
+    print(f"[sakti] will run: {command}")
+    answer = input(f"Commit this? [y/N] ").strip().lower()
+    return answer in ("y", "yes")
+
+
+def _confirm_tool(tool: str, command: str) -> bool:
+    print(f"[sakti] will run: {command}")
+    answer = input(f"Install tool {tool}? [y/N] ").strip().lower()
+    return answer in ("y", "yes")
+
+
 def _cmd_dev_run(args) -> int:
     engine = _dev_engine(args)
     result = engine.run_project(args.path, script=args.script,
@@ -281,6 +298,90 @@ def _cmd_dev_replay(args) -> int:
     return _print_dev_result(result)
 
 
+def _cmd_dev_git(args) -> int:
+    engine = _dev_engine(args)
+    if args.git_action == "status":
+        result = engine.git_status(args.path, dry_run=args.dry)
+    elif args.git_action == "push":
+        result = engine.git_push(args.path, dry_run=args.dry)
+    elif args.git_action == "commit":
+        asker = _confirm_commit if not args.yes else None
+        result = engine.git_commit(args.message, path=args.path,
+                                   add_all=not args.staged,
+                                   dry_run=args.dry, confirm=asker)
+    else:
+        print(f"unknown git action: {args.git_action}", file=sys.stderr)
+        return 1
+    return _print_dev_result(result)
+
+
+def _cmd_dev_docker(args) -> int:
+    engine = _dev_engine(args)
+    if args.docker_action == "build":
+        result = engine.docker_build(args.path, tag=args.tag,
+                                     dry_run=args.dry)
+    elif args.docker_action == "run":
+        result = engine.docker_run(args.path, image=args.image,
+                                   tag=args.tag, ports=args.ports,
+                                   detach=args.detach, dry_run=args.dry)
+    else:
+        print(f"unknown docker action: {args.docker_action}",
+              file=sys.stderr)
+        return 1
+    return _print_dev_result(result)
+
+
+def _cmd_dev_opencode(args) -> int:
+    engine = _dev_engine(args)
+    if args.opencode_action == "run":
+        result = engine.opencode_run(args.prompt, path=args.path,
+                                     dry_run=args.dry)
+    elif args.opencode_action == "generate":
+        result = engine.opencode_generate(args.prompt, path=args.path,
+                                          output_file=args.file,
+                                          dry_run=args.dry)
+    else:
+        print(f"unknown opencode action: {args.opencode_action}",
+              file=sys.stderr)
+        return 1
+    return _print_dev_result(result)
+
+
+def _cmd_tools(args) -> int:
+    registry = ToolRegistry()
+    if args.tools_action == "list":
+        print("tool ecosystem (Phase 4B)")
+        for tool in registry.all():
+            state = "installed" if registry.is_installed(tool.name) \
+                else "missing"
+            mark = "[x]" if state == "installed" else "[ ]"
+            print(f"  {mark} {tool.name:<12} {tool.description} "
+                  f"({state})")
+        return 0
+    if args.tools_action == "install":
+        manager = ToolManager(registry=registry)
+        asker = _confirm_tool if not args.yes else None
+        result = manager.install_tool(args.tool, dry_run=args.dry,
+                                      confirm=asker)
+        return _print_tools_result(result)
+    print(f"unknown tools action: {args.tools_action}", file=sys.stderr)
+    return 1
+
+
+def _confirm_tool(tool: str, command: str) -> bool:
+    print(f"[sakti] will run: {command}")
+    answer = input(f"Install tool {tool}? [y/N] ").strip().lower()
+    return answer in ("y", "yes")
+
+
+def _print_tools_result(result) -> int:
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
+    return 0 if result.success else 1
+
+
 def _main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="sakti", description="SaktiAI CLI")
     parser.add_argument("--version", action="version",
@@ -341,7 +442,8 @@ def _main(argv=None) -> int:
                             choices=("success", "fail", "dry-run"),
                             help="filter by status")
     p_dev_hist.add_argument("--action", default=None,
-                            choices=("run", "install", "build", "replay"),
+                            choices=("run", "install", "build", "replay",
+                                     "git", "docker", "opencode"),
                             help="filter by action")
     p_dev_hist.set_defaults(func=_cmd_dev_history)
     hist_sub = p_dev_hist.add_subparsers(dest="history_action")
@@ -353,7 +455,8 @@ def _main(argv=None) -> int:
     p_hist_search.add_argument("--status", default=None,
                                choices=("success", "fail", "dry-run"))
     p_hist_search.add_argument("--action", default=None,
-                               choices=("run", "install", "build", "replay"))
+                               choices=("run", "install", "build", "replay",
+                                        "git", "docker", "opencode"))
     p_hist_search.set_defaults(func=_cmd_dev_history_search)
 
     p_hist_clear = hist_sub.add_parser("clear", help="erase command history")
@@ -372,8 +475,82 @@ def _main(argv=None) -> int:
     p_hist_export.add_argument("--status", default=None,
                                choices=("success", "fail", "dry-run"))
     p_hist_export.add_argument("--action", default=None,
-                               choices=("run", "install", "build", "replay"))
+                               choices=("run", "install", "build", "replay",
+                                        "git", "docker", "opencode"))
     p_hist_export.set_defaults(func=_cmd_dev_history_export)
+
+    p_dev_git = dev_sub.add_parser("git", help="git repository commands")
+    git_sub = p_dev_git.add_subparsers(dest="git_action")
+    p_git_status = git_sub.add_parser("status", help="show repo status")
+    p_git_status.add_argument("--path", default=None)
+    p_git_status.add_argument("--dry", action="store_true")
+    p_git_status.add_argument("--no-live", action="store_true")
+    p_git_status.set_defaults(func=_cmd_dev_git)
+    p_git_commit = git_sub.add_parser("commit", help="stage + commit")
+    p_git_commit.add_argument("-m", "--message", required=True,
+                              help="commit message")
+    p_git_commit.add_argument("--path", default=None)
+    p_git_commit.add_argument("--staged", action="store_true",
+                              help="commit staged files only (no add)")
+    p_git_commit.add_argument("--yes", "-y", action="store_true",
+                              help="skip confirmation")
+    p_git_commit.add_argument("--dry", action="store_true")
+    p_git_commit.add_argument("--no-live", action="store_true")
+    p_git_commit.set_defaults(func=_cmd_dev_git)
+    p_git_push = git_sub.add_parser("push", help="push to remote")
+    p_git_push.add_argument("--path", default=None)
+    p_git_push.add_argument("--dry", action="store_true")
+    p_git_push.add_argument("--no-live", action="store_true")
+    p_git_push.set_defaults(func=_cmd_dev_git)
+
+    p_dev_docker = dev_sub.add_parser("docker", help="docker commands")
+    docker_sub = p_dev_docker.add_subparsers(dest="docker_action")
+    p_docker_build = docker_sub.add_parser("build", help="build image")
+    p_docker_build.add_argument("--path", default=None)
+    p_docker_build.add_argument("--tag", default=None, help="image tag")
+    p_docker_build.add_argument("--dry", action="store_true")
+    p_docker_build.add_argument("--no-live", action="store_true")
+    p_docker_build.set_defaults(func=_cmd_dev_docker)
+    p_docker_run = docker_sub.add_parser("run", help="run container")
+    p_docker_run.add_argument("--path", default=None)
+    p_docker_run.add_argument("--image", default=None,
+                              help="image name (default: <dir>:latest)")
+    p_docker_run.add_argument("--tag", default=None, help="image tag")
+    p_docker_run.add_argument("--ports", default=None, help="-p PORT:PORT")
+    p_docker_run.add_argument("--detach", "-d", action="store_true")
+    p_docker_run.add_argument("--dry", action="store_true")
+    p_docker_run.add_argument("--no-live", action="store_true")
+    p_docker_run.set_defaults(func=_cmd_dev_docker)
+
+    p_dev_oc = dev_sub.add_parser("opencode", help="opencode agent commands")
+    oc_sub = p_dev_oc.add_subparsers(dest="opencode_action")
+    p_oc_run = oc_sub.add_parser("run", help="send a prompt to opencode")
+    p_oc_run.add_argument("prompt", help="the prompt to send")
+    p_oc_run.add_argument("--path", default=None)
+    p_oc_run.add_argument("--dry", action="store_true")
+    p_oc_run.add_argument("--no-live", action="store_true")
+    p_oc_run.set_defaults(func=_cmd_dev_opencode)
+    p_oc_gen = oc_sub.add_parser("generate", help="generate + save code")
+    p_oc_gen.add_argument("prompt", help="what to generate")
+    p_oc_gen.add_argument("--file", "--output", default=None,
+                          help="project file to write (relative)")
+    p_oc_gen.add_argument("--path", default=None)
+    p_oc_gen.add_argument("--dry", action="store_true")
+    p_oc_gen.add_argument("--no-live", action="store_true")
+    p_oc_gen.set_defaults(func=_cmd_dev_opencode)
+
+    p_tools = sub.add_parser("tools", help="tool ecosystem")
+    tools_sub = p_tools.add_subparsers(dest="tools_action")
+    p_tools_list = tools_sub.add_parser("list", help="list known tools")
+    p_tools_list.set_defaults(func=_cmd_tools)
+    p_tools_install = tools_sub.add_parser("install",
+                                           help="install a tool (pacman/apt)")
+    p_tools_install.add_argument("tool", help="tool name (see tools list)")
+    p_tools_install.add_argument("--yes", "-y", action="store_true",
+                                 help="skip confirmation")
+    p_tools_install.add_argument("--dry", action="store_true",
+                                 help="print the package command, do not run")
+    p_tools_install.set_defaults(func=_cmd_tools)
 
     p_dev_replay = dev_sub.add_parser("replay", help="re-run a past command")
     p_dev_replay.add_argument("entry_id", type=int, help="history entry id")

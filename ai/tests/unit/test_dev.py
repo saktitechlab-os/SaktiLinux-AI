@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from ai.core.types import ActionResult
 from ai.dev import (DevCommandEngine, DevContextDetector, DevHistory,
                     format_export)
 from ai.dev.errors import diagnose
@@ -582,6 +584,155 @@ class TestDevHistoryRecording(unittest.TestCase):
         result = engine.run_project(d)
         self.assertTrue(result.success)
         self.assertEqual(engine.history_list(), [])
+
+
+class _ToolRunner(_RecordingRunner):
+    """Runner that returns success with canned output for tool commands."""
+
+    def __init__(self):
+        super().__init__()
+        self.canned = {}
+
+    def run(self, command, dry_run=False, cwd=None):
+        self.commands.append(command)
+        if dry_run:
+            return ActionResult(exit_code=0,
+                                stdout=f"[dry-run] {command}", stderr="",
+                                success=True, dry_run=True)
+        out = "ok"
+        for key, value in self.canned.items():
+            if key in command:
+                out = value
+                break
+        return ActionResult(exit_code=0, stdout=out, stderr="",
+                            success=True)
+
+    def run_live(self, command, on_line=None, cwd=None, timeout=None):
+        return self.run(command, cwd=cwd)
+
+
+def git_bin():
+    import shutil
+    return shutil.which("git") or "git"
+
+
+class TestDevToolEngine(unittest.TestCase):
+    """Engine git/docker/opencode methods: planning + recording."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="sakti_engine_tools_")
+        self.store = DevHistory(path=os.path.join(self.dir, "h.json"),
+                                limit=50)
+        self.runner = _ToolRunner()
+        self.engine = DevCommandEngine(runner=self.runner,
+                                       history=self.store,
+                                       live=False)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _make_repo(self):
+        sub_directory = os.path.join(self.dir, "repo")
+        os.makedirs(sub_directory)
+        subprocess.run([git_bin(), "init", "-q"], cwd=sub_directory,
+                       check=False, capture_output=True)
+        subprocess.run([git_bin(), "config", "user.email", "a@b"],
+                       cwd=sub_directory, check=False, capture_output=True)
+        subprocess.run([git_bin(), "config", "user.name", "T"],
+                       cwd=sub_directory, check=False, capture_output=True)
+        with open(os.path.join(sub_directory, "f.txt"), "w") as fh:
+            fh.write("hi")
+        return sub_directory
+
+    def test_git_status_not_a_repo_fails(self):
+        result = self.engine.git_status(self.dir)
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, -1)
+
+    def test_git_status_records_history(self):
+        repo = self._make_repo()
+        result = self.engine.git_status(repo, dry_run=True)
+        self.assertTrue(result.success)
+        entries = self.store.list()
+        self.assertEqual(entries[0]["action"], "git")
+        self.assertEqual(entries[0]["status"], "dry-run")
+        self.assertIn("status", entries[0]["command"])
+
+    def test_git_status_marks_dirty(self):
+        repo = self._make_repo()
+        subprocess.run([git_bin(), "add", "-A"], cwd=repo, check=False,
+                       capture_output=True)
+        subprocess.run([git_bin(), "commit", "-m", "init"], cwd=repo,
+                       check=False, capture_output=True)
+        with open(os.path.join(repo, "f.txt"), "w") as fh:
+            fh.write("changed")
+        result = self.engine.git_status(repo)
+        self.assertTrue(result.success)
+        self.assertIn("git status", result.stdout)
+
+    def test_git_commit_missing_message_fails(self):
+        repo = self._make_repo()
+        result = self.engine.git_commit("", path=repo)
+        self.assertFalse(result.success)
+        self.assertIn("commit message", result.stderr)
+
+    def test_git_commit_records_and_runs(self):
+        repo = self._make_repo()
+        result = self.engine.git_commit("hello world", path=repo,
+                                        dry_run=True)
+        self.assertTrue(result.success)
+        entries = self.store.list()
+        self.assertEqual(entries[0]["action"], "git")
+        self.assertIn("commit -m \"hello world\"", entries[0]["command"])
+
+    def test_git_commit_confirm_abort(self):
+        repo = self._make_repo()
+        result = self.engine.git_commit("x", path=repo,
+                                        confirm=lambda a, b: False)
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, -4)
+
+    def test_docker_build_missing_dockerfile_fails(self):
+        result = self.engine.docker_build(self.dir)
+        self.assertFalse(result.success)
+        self.assertIn("no Dockerfile", result.stderr)
+
+    def test_docker_build_plan_and_record(self):
+        with open(os.path.join(self.dir, "Dockerfile"), "w") as fh:
+            fh.write("FROM x")
+        result = self.engine.docker_build(self.dir, dry_run=True)
+        self.assertTrue(result.success)
+        entries = self.store.list()
+        self.assertEqual(entries[0]["action"], "docker")
+        self.assertIn("docker build", entries[0]["command"])
+
+    def test_docker_run_plan(self):
+        with open(os.path.join(self.dir, "Dockerfile"), "w") as fh:
+            fh.write("FROM x")
+        result = self.engine.docker_run(self.dir, image="app:v2",
+                                        ports="3000:80", dry_run=True)
+        self.assertTrue(result.success)
+        self.assertIn("app:v2", self.runner.commands[-1])
+
+    def test_opencode_run_empty_prompt_fails(self):
+        result = self.engine.opencode_run("", path=self.dir)
+        self.assertFalse(result.success)
+
+    def test_opencode_run_plan_and_record(self):
+        result = self.engine.opencode_run("write api", path=self.dir,
+                                          dry_run=True)
+        self.assertTrue(result.success)
+        entries = self.store.list()
+        self.assertEqual(entries[0]["action"], "opencode")
+        self.assertIn("write api", entries[0]["command"])
+
+    def test_opencode_generate_plan(self):
+        result = self.engine.opencode_generate("script please",
+                                               path=self.dir,
+                                               output_file="gen.py",
+                                               dry_run=True)
+        self.assertTrue(result.success)
+        self.assertIn("gen.py", self.runner.commands[-1])
 
 
 if __name__ == "__main__":

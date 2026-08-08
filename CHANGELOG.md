@@ -4,6 +4,51 @@ All notable changes to SaktiLinux AI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-08-07
+
+### Phase 4B — Tool Integration + Ecosystem Expansion
+
+#### Added
+
+- **`ai/tools/` Tool Ecosystem** — new subpackage:
+  - `registry.py` — `Tool` catalog (git, docker, opencode, node, npm,
+    python, pip, composer, code, php) + `ToolRegistry` with real
+    installed-tool detection (`shutil.which` on the host PATH) and
+    dynamic registration.
+  - `manager.py` — `ToolManager`: natural command → tool mapping
+    (`git status` → git tool), install recipes per package manager
+    (`sudo pacman -S ...`, `sudo apt-get install -y ...`), real installs
+    with confirmation and `--dry` planning; clean error when no package
+    manager exists.
+  - `adapters/` — git, docker, opencode adapters that detect context
+    (repo root, Dockerfile, project dir) and build real commands.
+- **Git integration** — `sakti-ai dev git status|commit|push`:
+  - status shows staged/unstaged (`git status --short`), clean state
+    after a commit; commit uses a safe flow (repo + message required,
+    confirm prompt, `--yes` to skip, `--staged` to skip add); push runs
+    real `git push` (clean failure without a remote). All actions are
+    recorded in dev history (new `git` action).
+- **Docker integration** — `sakti-ai dev docker build|run`:
+  - detects the project `Dockerfile` (clean failure when absent),
+    builds `docker build -t <tag> .` (tag defaults to dir:latest), runs
+    `docker run --rm [-p PORTS] [-d] <image>`.
+- **OpenCode integration** — `sakti-ai dev opencode run|generate`:
+  - `run "<prompt>"` sends to the real `opencode` binary;
+    `generate "<prompt>" --file NAME` asks for complete file content and
+    auto-saves stdout into the project file. Fails cleanly (empty prompt
+    / missing directory) and respects `--dry`.
+- **CLI App Store foundation** — `sakti-ai tools list|install`:
+  - list shows the known toolset with real installed/missing state;
+    install uses pacman or apt-get (detected at runtime), with
+    confirmation, `-y`, and `--dry`.
+- **Tests** — 81 new (31 unit `ai/tests/unit/test_tools.py` + 22 unit
+  engine tool methods + 22 integration `test_tools_execution.py`):
+  true git repos (init/config/commit/log), tempdir Dockerfile planning,
+  real PATH detection, fake-pm recipe planning, CLI end-to-end git
+  commit/push/history, tools list/install, docker/opencode dry runs.
+  Full suite now **291 AI tests + 14 Phase 1-2 tests**.
+- Version bumped to **0.6.0**.
+
 ## [0.5.0] — 2026-08-07
 
 ### Phase 4A — Developer Core
