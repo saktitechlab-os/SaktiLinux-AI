@@ -4,6 +4,49 @@ All notable changes to SaktiLinux AI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] — 2026-08-08
+
+### Phase 5 — AI Automation Engine
+
+#### Added
+
+- **`ai/automation/` AI Automation Engine** — new subpackage that turns one
+  natural-language instruction into a real multi-step run:
+  ```bash
+  sakti-ai do "create a react app and run it"
+  sakti-ai do "install docker"
+  sakti-ai do "commit my changes with message fix bug" --dry
+  ```
+  - `planner.py` — `AutomationPlanner`: rule-based intent routing over
+    the classifier. Recognises create+run (react/next/vue/svelte/node/
+    python), tool installs, dependency installs, git commit/push, docker
+    build/run, opencode prompts, and plain run/build. Each step declares
+    `needs_tools` so the engine can install missing tools. Refuses empty,
+    unplannable, and destructive tasks (`rm -rf /`, `mkfs`, `dd if=`,
+    `curl | sh`, ...) with a clear `PlanError`.
+  - `executor.py` — `StepExecutor`: dispatches steps onto the real
+    `DevCommandEngine` / `ToolManager` surfaces (run, install, build,
+    git, docker, opencode, tool install) with real subprocess execution.
+  - `retry.py` — `RetryAnalyzer`: one smart retry per failure — missing
+    tool → install it then retry; npm ERESOLVE → `--legacy-peer-deps`;
+    timeout → plain retry once. Anything else fails fast.
+  - `engine.py` — `AutomationEngine.run(task, dry_run=False, yes=False)`
+    orchestrates plan → tool readiness (auto-install with confirmation,
+    `--yes` to skip) → sequential fail-fast execution → retry → per-step
+    dev-history records (`action=automation`) → `AutomationReport` with
+    elapsed time, per-step results, retry log, and failure point.
+- **CLI** — new top-level `sakti-ai do "<task>"` subcommand (`--path`,
+  `--dry` for plan-only, `--yes` to skip install prompts); `dev history`
+  filters now include the `automation` action.
+- **Tests** — 46 new (36 unit `ai/tests/unit/test_automation.py` with
+  recording fakes for executor/engine dispatch + 10 integration
+  `ai/tests/integration/test_automation_execution.py` driving REAL
+  subprocesses: temp Python project run, real git commit in a temp
+  repo, CLI end-to-end dry-run planning, destructive-task refusal,
+  history recording with isolated XDG data home).
+- Full suite now **337 AI tests + 14 Phase 1-2 tests**; version bumped
+  to **0.7.0**.
+
 ## [0.6.0] — 2026-08-07
 
 ### Phase 4B — Tool Integration + Ecosystem Expansion

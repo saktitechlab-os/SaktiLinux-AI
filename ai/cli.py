@@ -13,7 +13,9 @@ Usage:
     python3 -m ai.cli dev git status|commit -m MSG|push [--path DIR]
     python3 -m ai.cli dev docker build|run [--path DIR] [--tag T]
     python3 -m ai.cli dev opencode run|generate PROMPT [--file NAME]
+    python3 -m ai.cli opencode run|generate PROMPT [--file NAME]
     python3 -m ai.cli tools list|install <tool>
+    python3 -m ai.cli do "create a react app and run it" [--dry] [--yes]
     python3 -m ai.cli memory list [namespace]
     python3 -m ai.cli providers list
     python3 -m ai.cli plugins list
@@ -30,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ai import __version__
 from ai.actions import ActionPipeline
+from ai.automation import AutomationEngine
 from ai.command import CommandTranslator
 from ai.context import ContextEngine
 from ai.core import SaktiBrain
@@ -193,6 +196,45 @@ def _confirm_tool(tool: str, command: str) -> bool:
     print(f"[sakti] will run: {command}")
     answer = input(f"Install tool {tool}? [y/N] ").strip().lower()
     return answer in ("y", "yes")
+
+
+def _cmd_do(args) -> int:
+    hist = DevHistory()
+    engine = AutomationEngine(
+        confirm=None if args.yes or args.dry else _confirm_tool,
+        history=hist,
+        log=lambda message: print(message))
+    report = engine.run(args.task, dry_run=args.dry, yes=args.yes,
+                        cwd=args.path)
+    if report.plan_error:
+        print(f"[sakti] {report.plan_error}", file=sys.stderr)
+        return 1
+    print(f"[sakti] plan: {len(report.steps)} step(s) "
+          f"({'dry run' if report.dry_run else 'executing'})")
+    for step in report.steps:
+        print(f"  [{step['order']}/{len(report.steps)}] "
+              f"{step['description']}")
+    if report.dry_run:
+        print("[sakti] dry run — nothing was executed")
+        return 0
+    for order, result in report.results:
+        marker = "ok  " if result.success else "FAIL"
+        retried = (" (recovered)" if any(
+            r == order for r, _ in report.retried) else "")
+        print(f"  step {order}: {marker}{retried}")
+        if result.stdout:
+            print(f"    {result.stdout.strip()}")
+        if result.stderr:
+            print(f"    [sakti] {result.stderr.strip()}", file=sys.stderr)
+    if report.success:
+        print(f"[sakti] all {len(report.steps)} steps succeeded "
+              f"({report.elapsed_ms} ms)")
+        return 0
+    failed = report.results[-1][0] if report.results else "?"
+    print(f"[sakti] stopped at step {failed}: "
+          f"{report.failed_step or 'unknown failure'}",
+          file=sys.stderr)
+    return 1
 
 
 def _cmd_dev_run(args) -> int:
@@ -443,7 +485,8 @@ def _main(argv=None) -> int:
                             help="filter by status")
     p_dev_hist.add_argument("--action", default=None,
                             choices=("run", "install", "build", "replay",
-                                     "git", "docker", "opencode"),
+                                     "git", "docker", "opencode",
+                                     "automation"),
                             help="filter by action")
     p_dev_hist.set_defaults(func=_cmd_dev_history)
     hist_sub = p_dev_hist.add_subparsers(dest="history_action")
@@ -456,7 +499,8 @@ def _main(argv=None) -> int:
                                choices=("success", "fail", "dry-run"))
     p_hist_search.add_argument("--action", default=None,
                                choices=("run", "install", "build", "replay",
-                                        "git", "docker", "opencode"))
+                                        "git", "docker", "opencode",
+                                        "automation"))
     p_hist_search.set_defaults(func=_cmd_dev_history_search)
 
     p_hist_clear = hist_sub.add_parser("clear", help="erase command history")
@@ -476,7 +520,8 @@ def _main(argv=None) -> int:
                                choices=("success", "fail", "dry-run"))
     p_hist_export.add_argument("--action", default=None,
                                choices=("run", "install", "build", "replay",
-                                        "git", "docker", "opencode"))
+                                        "git", "docker", "opencode",
+                                        "automation"))
     p_hist_export.set_defaults(func=_cmd_dev_history_export)
 
     p_dev_git = dev_sub.add_parser("git", help="git repository commands")
@@ -559,6 +604,18 @@ def _main(argv=None) -> int:
     p_dev_replay.add_argument("--no-live", action="store_true",
                               help="buffer output instead of streaming it live")
     p_dev_replay.set_defaults(func=_cmd_dev_replay)
+
+    p_do = sub.add_parser(
+        "do", help="automated multi-step tasks (Phase 5)")
+    p_do.add_argument("task",
+                      help='e.g. "create a react app and run it"')
+    p_do.add_argument("--path", default=None,
+                      help="project directory to operate in")
+    p_do.add_argument("--dry", action="store_true",
+                      help="plan only — do not execute anything")
+    p_do.add_argument("--yes", "-y", action="store_true",
+                      help="skip tool-install confirmations")
+    p_do.set_defaults(func=_cmd_do)
 
     p_mem = sub.add_parser("memory", help="inspect memory")
     p_mem.add_argument("namespace", nargs="?", default="history")

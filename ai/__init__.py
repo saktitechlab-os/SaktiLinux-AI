@@ -19,6 +19,7 @@ plugins     plugin SDK + registry
 dev         developer core: project detection + real run/install/build
 """
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = ["core", "memory", "context", "planner", "command",
-           "actions", "voice", "llm", "providers", "plugins", "dev"]
+           "actions", "voice", "llm", "providers", "plugins", "dev",
+           "tools", "automation"]
