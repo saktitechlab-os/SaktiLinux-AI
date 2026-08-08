@@ -4,6 +4,46 @@ All notable changes to SaktiLinux AI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] — 2026-08-08
+
+### Phase 6 — SaktiOS Custom UI Shell
+
+#### Added
+
+- **`ui/` package** — fullscreen "Jarvis-style" OS interface, stdlib-only
+  (no dependencies, no build step):
+  - `web/` — vanilla HTML/CSS/JS frontend: boot splash with staged boot
+    lines, centered AI chat surface, live activity-log side panel,
+    bottom command dock, hidden launcher overlay, and a built-in minimal
+    browser overlay (system browser via kiosk window).
+  - `server.py` — `UIServer` (ThreadingHTTPServer) + `serve()`; routes:
+    `/`, `/static/*` (path-traversal blocked), `/branding/logo`,
+    `/favicon.ico`, `/wallpaper`, `/api/status` (engine/version/ready),
+    `/api/theme` (brand palette from `branding/colors.json` exported as
+    `--sakti-*` CSS variables), `/api/apps`, `/api/logs`, chat at
+    `POST /api/chat`, automation at `POST /api/do`, unknown `/api/*` →
+    404. Falls back to the repo `branding/logo.svg` when the user logo
+    is missing and to a generated SVG gradient when the wallpaper is
+    missing.
+  - `theme.py` — loads the brand palette and maps it onto CSS variables.
+  - `shell.py` — `ShellSetup` generates target-side configs: minimal
+    Hyprland config or Openbox autostart (auto-launches the UI),
+    `getty` and `sddm` auto-login overrides, wallpaper assignment
+    (`swww` on Hyprland, `feh` on Openbox), and a Vatican-2-style
+    purge plan for KDE/Plasma leftovers so the custom shell is the
+    visible desktop.
+- **CLI** — `sakti-ai ui` subcommand: `serve` (HTTP + pluggable brain and
+  automation engine), `status` (wm, wallpaper, UI state), `install`
+  (write Hyprland/Openbox autostart + auto-login configs, `--wm`,
+  `--config-dir`, `--user`).
+- **`scripts/sakti-ui-shell.sh`** — target-side launcher that starts the
+  UI server and opens it in a real window (pywebview → chromium kiosk →
+  firefox kiosk → xdg-open fallback).
+- **Tests** — `ai/tests/unit/test_ui.py` (24 tests: theme bridge, server
+  routing/errors/fallbacks, ShellSetup configs, autologin, purge plan,
+  status) and `ai/tests/integration/test_ui_shell.py` (real brain +
+  real AutomationEngine end-to-end over HTTP, CLI status/install/serve).
+
 ## [0.7.0] — 2026-08-08
 
 ### Phase 5 — AI Automation Engine

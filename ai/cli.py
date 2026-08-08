@@ -16,6 +16,9 @@ Usage:
     python3 -m ai.cli opencode run|generate PROMPT [--file NAME]
     python3 -m ai.cli tools list|install <tool>
     python3 -m ai.cli do "create a react app and run it" [--dry] [--yes]
+    python3 -m ai.cli ui serve [--host H] [--port P]
+    python3 -m ai.cli ui status
+    python3 -m ai.cli ui install [--config-dir DIR] [--wm hyprland|openbox]
     python3 -m ai.cli memory list [namespace]
     python3 -m ai.cli providers list
     python3 -m ai.cli plugins list
@@ -30,6 +33,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# noqa: E402 — sys.path bootstrap above
 from ai import __version__
 from ai.actions import ActionPipeline
 from ai.automation import AutomationEngine
@@ -43,6 +47,8 @@ from ai.plugins import PluginLoader
 from ai.providers import ProviderManager
 from ai.tools import ToolManager, ToolRegistry
 from ai.voice import VoiceEngine, WakeWord
+from ui.server import serve as ui_serve
+from ui.shell import ShellSetup
 
 
 def _check_ollama(brain: SaktiBrain) -> None:
@@ -93,6 +99,39 @@ def _cmd_status(args) -> int:
     print("modules:")
     for name, loaded in status["modules"].items():
         print(f"  {name}: {'on' if loaded else 'off'}")
+    return 0
+
+
+def _cmd_ui(args) -> int:
+    if args.ui_action == "status":
+        info = ShellSetup().status()
+        for key, value in info.items():
+            print(f"{key}: {value}")
+        return 0
+    if args.ui_action == "install":
+        setup = ShellSetup(wm=args.wm or "", user=args.user or "sakti")
+        written = setup.generate(args.config_dir)
+        print(f"[sakti] wrote {len(written)} UI shell config file(s):")
+        for path in written:
+            print(f"  - {path}")
+        print("[sakti] note: run `sakti-ai ui serve` on the target to "
+              "start the interface")
+        return 0
+    brain = _brain()
+    server = ui_serve(
+        host=args.host, port=args.port,
+        brain=brain,
+        automation_factory=lambda: AutomationEngine(
+            history=DevHistory(), log=lambda _m: None),
+        history_factory=DevHistory)
+    print(f"[sakti] SaktiOS UI running at {server.server_url()} — "
+          f"Ctrl-C to stop")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[sakti] UI server stopped")
+    finally:
+        server.server_close()
     return 0
 
 
@@ -616,6 +655,28 @@ def _main(argv=None) -> int:
     p_do.add_argument("--yes", "-y", action="store_true",
                       help="skip tool-install confirmations")
     p_do.set_defaults(func=_cmd_do)
+
+    p_ui = sub.add_parser(
+        "ui", help="SaktiOS custom UI shell (Phase 6)")
+    ui_sub = p_ui.add_subparsers(dest="ui_action")
+    p_ui_serve = ui_sub.add_parser("serve",
+                                   help="start the UI web server")
+    p_ui_serve.add_argument("--host", default="127.0.0.1")
+    p_ui_serve.add_argument("--port", type=int, default=8765)
+    p_ui_serve.set_defaults(func=_cmd_ui)
+    p_ui_status = ui_sub.add_parser("status",
+                                    help="UI shell / branding status")
+    p_ui_status.set_defaults(func=_cmd_ui)
+    p_ui_install = ui_sub.add_parser(
+        "install", help="write WM + autologin + branding configs")
+    p_ui_install.add_argument("--config-dir", default=None,
+                              help="output directory (default "
+                                   "~/.config/sakti)")
+    p_ui_install.add_argument("--wm", default=None,
+                              choices=("hyprland", "openbox"))
+    p_ui_install.add_argument("--user", default=None,
+                              help="auto-login user (default: sakti)")
+    p_ui_install.set_defaults(func=_cmd_ui)
 
     p_mem = sub.add_parser("memory", help="inspect memory")
     p_mem.add_argument("namespace", nargs="?", default="history")

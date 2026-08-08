@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>SaktiOS</title>
+  <link rel="icon" href="/branding/logo">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main id="app" class="app">
+
+    <!-- splash / boot experience -->
+    <section id="splash" class="splash" aria-hidden="false">
+      <img id="splash-logo" class="splash-logo" src="/branding/logo"
+           alt="SaktiOS logo">
+      <h1 class="splash-title">SaktiOS</h1>
+      <p id="splash-boot" class="splash-boot">Initializing AI Core&hellip;</p>
+      <div class="splash-bar"><span id="splash-fill"></span></div>
+    </section>
+
+    <!-- the shell (revealed after splash) -->
+    <div id="shell" class="shell hidden">
+
+      <header class="bar">
+        <button id="btn-launcher" class="bar-button" title="App launcher">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <img id="bar-logo" class="bar-logo" src="/branding/logo" alt="">
+        <span class="bar-name">SaktiOS</span>
+        <span id="engine-pill" class="pill">initializing</span>
+        <span class="bar-spacer"></span>
+        <span id="clock" class="clock">--:--</span>
+      </header>
+
+      <main class="workspace">
+        <!-- center: AI chat -->
+        <section class="chat card" aria-label="AI chat">
+          <header class="card-head">
+            <img class="card-logo" src="/branding/logo" alt="">
+            <span>SaktiAI</span>
+            <span class="tag">offline</span>
+          </header>
+          <div id="chat-log" class="chat-log">
+            <p class="hint">Ask me to install tools, run projects, commit
+              code &mdash; or type <code>do: &lt;task&gt;</code> for automated
+              multi-step work.</p>
+          </div>
+          <form id="chat-form" class="chat-form" autocomplete="off">
+            <input id="chat-input" type="text" placeholder="Talk to your OS..."
+                   aria-label="Message">
+            <button type="submit" class="send">Send</button>
+          </form>
+        </section>
+
+        <!-- right: live logs -->
+        <aside class="logs card" aria-label="Live logs">
+          <header class="card-head"><span>Live Logs</span></header>
+          <pre id="log-view" class="log-view"></pre>
+          <button id="log-clear" class="quiet">clear</button>
+        </aside>
+      </main>
+
+      <!-- bottom command dock -->
+      <footer class="dock">
+        <form id="dock-form" class="dock-form">
+          <span class="dock-prompt">sakti&#9656;</span>
+          <input id="dock-input" placeholder="Run a task &mdash; e.g. do &quot;install docker&quot;"
+                 aria-label="Command">
+          <button type="submit" class="dock-go">Run</button>
+        </form>
+      </footer>
+    </div>
+
+    <!-- hidden app launcher -->
+    <aside id="launcher" class="launcher hidden" aria-hidden="true">
+      <header class="launcher-head">
+        <img src="/branding/logo" alt="">
+        <span>Apps</span>
+        <button id="btn-launcher-close" class="quiet">close</button>
+      </header>
+      <div id="app-grid" class="app-grid"></div>
+    </aside>
+
+    <!-- custom minimal browser placeholder -->
+    <section id="browser" class="browser hidden" aria-hidden="true">
+      <header class="browser-bar">
+        <span class="browser-name">SaktiOS Web</span>
+        <form id="browser-form" autocomplete="off">
+          <input id="browser-url" placeholder="https://example.com"
+                 aria-label="Address">
+        </form>
+        <button id="browser-close" class="quiet">close</button>
+      </header>
+      <div id="browser-frame" class="browser-frame">
+        <div class="browser-about">
+          <img src="/branding/logo" alt="">
+          <p>This is the SaktiOS custom browser shell. Enter an address
+            above to visit it inside the interface.</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
