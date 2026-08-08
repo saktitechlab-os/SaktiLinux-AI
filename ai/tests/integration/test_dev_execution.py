@@ -350,6 +350,28 @@ class TestDevHistoryCli(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("[dry-run]", proc.stdout)
 
+    def test_replay_failed_command_reproduces_failure(self):
+        # a source file that fails at runtime -> recorded as fail
+        with open(os.path.join(self.dir, "main.py"), "w") as fh:
+            fh.write("import sys; sys.exit(3)\n")
+        run = self._cli("run")
+        self.assertNotEqual(run.returncode, 0)
+        proc = self._cli("replay", "1")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("dev command failed", proc.stderr)
+        # the replay itself is recorded as a failing entry
+        hist = self._cli("history", "--action", "replay")
+        self.assertIn("FAIL", hist.stdout)
+
+    def test_replay_failed_install_command(self):
+        self._cli("run")
+        # a failing install that leaves a fail entry
+        proc = self._cli("install", "definitely-not-a-real-package-xyzzy",
+                         "--yes")
+        self.assertNotEqual(proc.returncode, 0)
+        hist = self._cli("history", "--action", "install")
+        self.assertIn("FAIL", hist.stdout)
+
 
 class TestDevHistoryFilteringCli(unittest.TestCase):
     """Filtering, search, export, and clear of the dev history."""

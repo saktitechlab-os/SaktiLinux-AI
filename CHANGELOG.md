@@ -4,6 +4,31 @@ All notable changes to SaktiLinux AI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-08-07
+
+### Phase 4A — Developer Core
+
+#### Added
+
+- **History system completion** — full unit + integration test coverage for
+  the persistent dev command history:
+  - Store: default cap of **50** verified (`list` keeps newest 50,
+    `list(limit=)` slicing), monotonic ids continue across reloads, `get`
+    returns unknown ids as `None` and returns copies, persistence across
+    reloads.
+  - Engine: `history_list()` returns recorded entries and honors `limit`,
+    returns `[]` without a store; `replay()` re-runs stored commands,
+    missing-id fails with exit -5, dry-run replays never execute.
+  - CLI integration: `dev history` listing, empty state, `dev replay`
+    end-to-end, **failure replay** reproduces a failing command and records
+    the replay as `FAIL`, dry-run replay leaves no side-effect, failed
+    installs are recorded as `fail`.
+- **Tests** — 11 new (7 unit: cap-50 default, list slicing, get-unknown/
+  copy-safety, id monotonicity + continuation across reload, engine
+  history_list with/without store; 4 integration: failing replay, failed
+  install recorded). Full suite now **226 AI tests + 14 Phase 1-2 tests**.
+- Version bumped to **0.5.0**.
+
 ## [Unreleased]
 
 ### Phase 4A — Developer Core

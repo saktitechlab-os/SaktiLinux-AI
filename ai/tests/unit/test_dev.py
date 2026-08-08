@@ -372,6 +372,44 @@ class TestDevHistory(unittest.TestCase):
         entries = self.store.list()
         self.assertEqual([e["id"] for e in entries], [3, 2, 1])
 
+    def test_default_limit_is_50(self):
+        store = DevHistory(path=os.path.join(self.dir, "default_hist.json"))
+        for i in range(60):
+            store.add(f"cmd-{i}", "run", "", "success", 0)
+        entries = store.list()
+        self.assertEqual(len(entries), 50)
+        self.assertTrue(all(e["id"] > 10 for e in entries))
+
+    def test_list_slices_to_given_limit(self):
+        for i in range(5):
+            self.store.add(f"cmd-{i}", "run", "", "success", 0)
+        self.assertEqual(len(self.store.list(limit=2)), 2)
+        self.assertEqual(self.store.list(limit=0), [])
+
+    def test_get_unknown_id_returns_none(self):
+        self.store.add("x", "run", "", "success", 0)
+        self.assertIsNone(self.store.get(999))
+        self.assertIsNone(self.store.get(0))
+
+    def test_get_returns_copy_not_mutation(self):
+        entry_id = self.store.add("x", "run", "", "success", 0)
+        entry = self.store.get(entry_id)
+        entry["command"] = "mutated"
+        self.assertEqual(self.store.get(entry_id)["command"], "x")
+
+    def test_ids_are_monotonic_across_adds(self):
+        ids = [self.store.add(f"c{i}", "run", "", "success", 0)
+               for i in range(5)]
+        self.assertEqual(ids, [1, 2, 3, 4, 5])
+
+    def test_ids_continue_across_reload(self):
+        self.store.add("a", "run", "", "success", 0)
+        self.store.add("b", "run", "", "success", 0)
+        reloaded = DevHistory(path=self.path, limit=3)
+        new_id = reloaded.add("c", "install", "", "success", 0)
+        self.assertEqual(new_id, 3)
+        self.assertEqual(len(reloaded), 3)
+
     def test_persistence_across_reload(self):
         self.store.add("persist-this", "install", "/p", "success", 0)
         reloaded = DevHistory(path=self.path, limit=3)
@@ -479,6 +517,25 @@ class TestDevHistoryRecording(unittest.TestCase):
     def tearDown(self):
         self.fx.destroy()
         shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_history_list_returns_recorded_entries(self):
+        d = self.fx.node(scripts={"dev": "vite"})
+        self.engine.run_project(d)
+        entries = self.engine.history_list()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["action"], "run")
+        self.assertEqual(entries[0]["exit_code"], 0)
+
+    def test_history_list_respects_limit(self):
+        for i in range(4):
+            self.store.add(f"cmd-{i}", "build", "/p", "success", 0)
+        entries = self.engine.history_list(limit=2)
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(entries[0]["command"], "cmd-3")
+
+    def test_history_list_without_store_is_empty(self):
+        engine = DevCommandEngine(runner=self.runner)
+        self.assertEqual(engine.history_list(), [])
 
     def test_engine_records_run(self):
         d = self.fx.node(scripts={"dev": "vite"})
