@@ -165,7 +165,8 @@ class ShellSetup:
         return steps
 
     # --------------------------------------------------- generator
-    def generate(self, out_dir: Optional[str] = None) -> List[str]:
+    def generate(self, out_dir: Optional[str] = None,
+                 session: str = "plasma") -> List[str]:
         """Write every config into `out_dir` (default ~/.config/sakti).
 
         Pure file generation — no system changes — safe to run and
@@ -189,7 +190,7 @@ class ShellSetup:
         write_rel("systemd/system/getty@tty1.service.d/override.conf",
                   self.getty_autologin())
         write_rel("sddm.conf.d/autologin.conf",
-                  self.sddm_autologin())
+                  self.sddm_autologin(session))
         return written
 
     # ----------------------------------------------------- status

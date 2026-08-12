@@ -51,6 +51,16 @@ from ui.server import serve as ui_serve
 from ui.shell import ShellSetup
 
 
+def _shell_home_for(user: str) -> str:
+    """Resolve the target user's home dir (portable: no-op on hosts
+    without `pwd`, e.g. Windows dev machines)."""
+    try:
+        import pwd
+        return pwd.getpwnam(user).pw_dir
+    except (ImportError, KeyError):
+        return ""
+
+
 def _check_ollama(brain: SaktiBrain) -> None:
     """Show a clear message when Ollama is registered but not running."""
     if brain.provider_manager is None:
@@ -109,8 +119,11 @@ def _cmd_ui(args) -> int:
             print(f"{key}: {value}")
         return 0
     if args.ui_action == "install":
-        setup = ShellSetup(wm=args.wm or "", user=args.user or "sakti")
-        written = setup.generate(args.config_dir)
+        user = args.user or "sakti"
+        setup = ShellSetup(wm=args.wm or "", user=user,
+                           home=_shell_home_for(user))
+        written = setup.generate(
+            args.config_dir, session=(args.wm or "plasma"))
         print(f"[sakti] wrote {len(written)} UI shell config file(s):")
         for path in written:
             print(f"  - {path}")
